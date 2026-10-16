@@ -1,0 +1,62 @@
+# ─── Raw & processed data (large, not reproducible to share) ───────────────────
+data/raw/
+data/processed/
+
+# ─── Allow only the synthetic/small committed CSVs ───────────────────────────
+!data/tables/
+data/tables/*.tif
+data/tables/*.shp
+
+# ─── Python environment ───────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ─── Jupyter ──────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb~
+
+# ─── Credentials — NEVER commit these ────────────────────────────────────────
+.env
+*.json
+!data/tables/*.json
+!outputs/*.json
+!outputs/**/*.json
+credentials.json
+service_account.json
+*_key.json
+*_secret*
+*_credentials*
+gee_credentials/
+.earthengine/
+
+# ─── OS files ─────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Editor files ─────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# ─── Large output files (commit only small ones) ─────────────────────────────
+outputs/**/*.tif
+outputs/**/*.shp
+reports/*.pdf
+reports/*.docx
+
+# ─── Temporary files ──────────────────────────────────────────────────────────
+*.tmp
+*.log
+*.bak
+scratch/

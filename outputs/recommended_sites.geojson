@@ -1,0 +1,110 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {
+    "title": "Recommended Check Dam Sites",
+    "n_sites": 5,
+    "generated_by": "checkdam-siting pipeline"
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          75.1025,
+          15.36394
+        ]
+      },
+      "properties": {
+        "site_id": 1,
+        "suitability_score": 0.724,
+        "storage_m3": 9464,
+        "cost_proxy": 2.71,
+        "submergence_ha": 1.76,
+        "slope_deg": 12.9,
+        "annual_rainfall_mm": 776,
+        "note": "⚠️ PLACEHOLDER — not a real recommended site"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          75.10298,
+          15.34219
+        ]
+      },
+      "properties": {
+        "site_id": 2,
+        "suitability_score": 0.709,
+        "storage_m3": 15107,
+        "cost_proxy": 0.58,
+        "submergence_ha": 0.66,
+        "slope_deg": 10.5,
+        "annual_rainfall_mm": 913,
+        "note": "⚠️ PLACEHOLDER — not a real recommended site"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          75.15893,
+          15.32204
+        ]
+      },
+      "properties": {
+        "site_id": 3,
+        "suitability_score": 0.869,
+        "storage_m3": 5130,
+        "cost_proxy": 2.92,
+        "submergence_ha": 1.81,
+        "slope_deg": 7.4,
+        "annual_rainfall_mm": 797,
+        "note": "⚠️ PLACEHOLDER — not a real recommended site"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          75.13366,
+          15.39572
+        ]
+      },
+      "properties": {
+        "site_id": 4,
+        "suitability_score": 0.675,
+        "storage_m3": 6934,
+        "cost_proxy": 3.04,
+        "submergence_ha": 1.59,
+        "slope_deg": 12.1,
+        "annual_rainfall_mm": 969,
+        "note": "⚠️ PLACEHOLDER — not a real recommended site"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          75.19731,
+          15.35362
+        ]
+      },
+      "properties": {
+        "site_id": 5,
+        "suitability_score": 0.752,
+        "storage_m3": 16041,
+        "cost_proxy": 2.99,
+        "submergence_ha": 1.62,
+        "slope_deg": 12.6,
+        "annual_rainfall_mm": 923,
+        "note": "⚠️ PLACEHOLDER — not a real recommended site"
+      }
+    }
+  ]
+}

@@ -1,0 +1,139 @@
+# PROGRESS.md — Stage Tracker
+
+> Update this file at the end of every stage.
+> Format: what was done, what decisions were made, what comes next.
+
+---
+
+## Current Stage: 0 — Setup ✅
+
+**Date completed:** 2026-10-16  
+**Verified:** `setup_stage0.py` ran cleanly; all 4 src modules import correctly.
+
+### What was done
+- Created repository skeleton with all folders and documentation files.
+- Wrote `README.md`, `ARCHITECTURE.md`, `DECISIONS.md`, `DATA_SOURCES.md`, `LEARNING_NOTES.md`.
+- Created `requirements.txt` with all needed packages.
+- Created `.gitignore` to exclude raw rasters, credentials, and large files.
+- Created `data/tables/synthetic_checkdam_features.csv` — a synthetic dataset for Stage 1 warm-up.
+- Created placeholder `docs/index.html` for the Leaflet dashboard.
+- Created `src/` module stubs for preprocessing, ML, and optimization.
+
+### Decisions made
+- See `DECISIONS.md` for all rationale.
+
+### What comes next (Stage 1)
+- Open `notebooks/stage1_ml_warmup.ipynb`.
+- Load the synthetic CSV and explore it (shape, columns, statistics, class balance).
+- Train a Random Forest and XGBoost model.
+- Implement spatial block cross-validation.
+- Plot feature importances and SHAP values.
+- Record AUC-ROC, precision, recall.
+- Write what you learned in `LEARNING_NOTES.md`.
+
+---
+
+## Stage 1 — ML Warm-up ✅
+
+**Date completed:** 2026-10-16
+
+### What was done
+- Loaded `synthetic_checkdam_features.csv` (1000 rows, 13 columns, 25% positive class).
+- Ran spatial block leave-one-out cross-validation (5 blocks) for both RF and XGBoost.
+- Trained final models on all data; computed SHAP values and feature importances.
+- Compared AHP baseline vs ML on same dataset.
+- Scored all 1000 candidates; saved to `outputs/stage1_all_candidates_scored.csv`.
+- Output plots: `stage1_feature_distributions.png`, `stage1_feature_importance.png`, `stage1_shap_summary.png`.
+
+### Key metrics achieved (spatial block CV — mean across 5 blocks)
+| Metric | Random Forest | XGBoost | AHP Baseline |
+|--------|:------------:|:-------:|:------------:|
+| AUC-ROC | **0.992** | **0.993** | 0.921 |
+| Precision | 0.911 | 0.924 | 0.325 |
+| Recall | 0.933 | 0.933 | 0.996 |
+| F1 | 0.921 | 0.928 | 0.491 |
+
+> Note: high AUC on synthetic data is expected — distributions were designed to be separable.
+> Real data AUC will be lower. The workflow and spatial CV setup are what matter here.
+
+### Top feature importances (Random Forest)
+| Rank | Feature | Importance |
+|------|---------|------------|
+| 1 | `slope_deg` | 0.265 |
+| 2 | `dist_to_road_m` | 0.205 |
+| 3 | `flow_accum` | 0.193 |
+| 4 | `twi` | 0.112 |
+| 5 | `stream_order` | 0.088 |
+
+### What I learned
+*(answer the prompts in LEARNING_NOTES.md in your own words)*
+
+### What comes next (Stage 2)
+- Select the sub-watershed study area.
+- Register for Google Earth Engine if not done.
+- Identify and download all data layers (DEM, LULC, rainfall, soil, geology, roads, dam points).
+- Populate `DATA_SOURCES.md` with real entries.
+
+---
+
+## Stage 2 — Study Area & Data Collection ⬜
+
+**Date completed:** —
+
+*(fill in)*
+
+---
+
+## Stage 3 — Terrain Processing ⬜
+
+**Date completed:** —
+
+*(fill in)*
+
+---
+
+## Stage 4 — Candidates & Feature Table ⬜
+
+**Date completed:** —
+
+*(fill in)*
+
+---
+
+## Stage 5 — Labels ⬜
+
+**Date completed:** —
+
+*(fill in)*
+
+---
+
+## Stage 6 — Real Modelling ⬜
+
+**Date completed:** —
+
+*(fill in)*
+
+---
+
+## Stage 7 — Optimization ⬜
+
+**Date completed:** —
+
+*(fill in)*
+
+---
+
+## Stage 8 — Dashboard ⬜
+
+**Date completed:** —
+
+*(fill in)*
+
+---
+
+## Stage 9 — Evaluation & Report ⬜
+
+**Date completed:** —
+
+*(fill in)*

@@ -1,0 +1,38 @@
+# Core dependencies
+numpy>=1.24
+pandas>=2.0
+scipy>=1.11
+
+# Geospatial
+rasterio>=1.3
+geopandas>=0.14
+shapely>=2.0
+pysheds>=0.4
+fiona>=1.9
+
+# Machine Learning
+scikit-learn>=1.3
+xgboost>=2.0
+shap>=0.43
+
+# Optimization
+pymoo>=0.6
+
+# Plotting
+matplotlib>=3.7
+seaborn>=0.12
+folium>=0.15
+
+# Notebooks
+jupyter>=1.0
+ipykernel>=6.0
+ipywidgets>=8.0
+
+# Utilities
+tqdm>=4.65
+pyyaml>=6.0
+python-dotenv>=1.0
+
+# Google Earth Engine (register separately at earthengine.google.com)
+earthengine-api>=0.1.380
+geemap>=0.29
