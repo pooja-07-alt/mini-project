@@ -1,9 +1,9 @@
 step,sites_remaining,sites_removed,positives_remaining,positives_removed,pct_remaining
-0_initial_raw_candidates,3000,0,864,0,100.0
-1_stream_order_within_1_to_3,2712,288,828,36,90.4
-2_slope_deg_within_1.0_to_15.0,2279,433,692,136,75.97
-3_min_catchment_area_1.0_km2,823,1456,262,430,27.43
-4_max_valley_width_120.0_m,665,158,216,46,22.17
-5_exclude_built_up_water_forest,573,92,208,8,19.1
-6_exclude_protected_areas,564,9,207,1,18.8
-7_min_dist_settlement_150.0_m,563,1,206,1,18.77
+0_initial_raw_candidates,3000,0,897,0,100.0
+1_stream_order_within_1_to_3,2712,288,703,194,90.4
+2_slope_deg_within_1.0_to_15.0,2279,433,628,75,75.97
+3_min_catchment_area_1.0_km2,823,1456,442,186,27.43
+4_max_valley_width_120.0_m,665,158,352,90,22.17
+5_exclude_built_up_water_forest,573,92,333,19,19.1
+6_exclude_protected_areas,564,9,332,1,18.8
+7_min_dist_settlement_150.0_m,563,1,331,1,18.77

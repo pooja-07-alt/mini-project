@@ -1,17 +1,22 @@
 # ARCHITECTURE.md — System Design
 
 > Keep this file current. Update it whenever the design changes.
-> Last updated: Stage 0 (2026-10-16)
+> Last updated: Stage 1b Pipeline Refactor (2026-11-19)
 
 ---
 
 ## Overview
 
-This system identifies optimal check dam locations in a Karnataka sub-watershed using a three-part pipeline:
+This system identifies optimal check dam locations in a Karnataka sub-watershed using an integrated AHP + ML hybrid pipeline:
 
 ```
-DATA ACQUISITION → PREPROCESSING → FEATURE ENGINEERING
-      → ML SUITABILITY MODEL → NSGA-II OPTIMIZATION → DASHBOARD
+RAW STREAM PIXELS → HARD CONSTRAINTS FILTERING → CANDIDATE SITES
+  ├── AHP SCORER (eigenvector weights, CR < 0.10, no labels)
+  └── ML SUITABILITY (Random Forest & XGBoost, spatial block CV)
+        → COMPARISON TABLE & ROC/PR CURVES
+        → AHP/ML AGREEMENT MAPPING (both_high, ml_only, ahp_only, both_low)
+        → MULTI-OBJECTIVE OPTIMIZATION (storage, cost proxy, cropland submergence)
+        → STATIC INTERACTIVE DASHBOARD (Leaflet)
 ```
 
 All heavy processing (ML, optimization) runs **offline in Python**. The dashboard only reads pre-computed GeoJSON — no backend server is needed.

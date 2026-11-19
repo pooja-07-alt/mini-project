@@ -1,364 +1,357 @@
 """
 ml_model.py
 ───────────
-Suitability scoring models for check dam site selection.
+Machine learning suitability models with Spatial Block Cross-Validation.
 
 Contains:
-  - AHPScorer       : Rule-based baseline (no training required)
-  - CheckDamModel   : Wrapper around RandomForest / XGBoost
-  - spatial_block_cv: Spatial cross-validation utility
-  - compute_shap    : SHAP explanation utility
+  - CheckDamMLPipeline: Preprocessing (OneHotEncoder + Passthrough) and ML models
+  - find_optimal_threshold: Chooses classification threshold on training folds by maximizing F1
+  - run_spatial_block_cv: Leave-one-spatial-block-out CV strictly grouped by block_id
+  - Out-of-fold predicted probability generation for Random Forest and XGBoost
 
-Design note: the `structure_type` parameter is reserved for future extension
-to farm ponds and percolation tanks without rewriting this module.
+Key Concepts:
+  1. Spatial Autocorrelation: Adjacent stream pixels are not independent. Random train/test
+     splits cause data leakage. Spatial block CV groups points geographically so an entire
+     block is held out as unseen test data.
+  2. Class Imbalance: Check dam sites are rarer than ordinary stream reaches. We handle
+     imbalance using balanced class weights (RF) and scale_pos_weight (XGBoost).
+  3. No Leakage: Categorical one-hot encoders are fitted on training folds only.
+
+SYNTHETIC - pipeline test, not a real finding.
 """
 
 from __future__ import annotations
 
-import warnings
+import argparse
 from pathlib import Path
-from typing import Literal, Optional
-
+from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
+import yaml
+from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
-    roc_auc_score,
+    average_precision_score,
+    f1_score,
     precision_score,
     recall_score,
-    f1_score,
-    classification_report,
+    roc_auc_score,
 )
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import OneHotEncoder
 
 try:
     import xgboost as xgb
     _XGB_AVAILABLE = True
 except ImportError:
     _XGB_AVAILABLE = False
-    warnings.warn("xgboost not installed. XGBoostModel will not be available.")
 
 try:
     import shap
     _SHAP_AVAILABLE = True
 except ImportError:
     _SHAP_AVAILABLE = False
-    warnings.warn("shap not installed. SHAP explanations will not be available.")
+
+DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 
 
-# ── Feature columns used by ML models ────────────────────────────────────────
-FEATURE_COLS = [
-    "slope_deg",
-    "flow_accum",
-    "twi",
-    "stream_order",
-    "annual_rainfall_mm",
-    "soil_texture_class",
-    "ndvi",
-    "dist_to_road_m",
-    "lulc_class",
-    "geology_permeability",
-]
-
-LABEL_COL = "label"
-BLOCK_COL = "spatial_block"  # column used for spatial cross-validation
+def load_config(config_path: Optional[str | Path] = None) -> dict:
+    """Load configuration dictionary from YAML file."""
+    path = Path(config_path) if config_path else DEFAULT_CONFIG_PATH
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# AHP Baseline Scorer
-# ─────────────────────────────────────────────────────────────────────────────
-
-class AHPScorer:
+def build_preprocessor(
+    base_features: List[str],
+    categorical_features: List[str],
+    include_ahp: bool = False,
+) -> Tuple[ColumnTransformer, List[str]]:
     """
-    Analytic Hierarchy Process (AHP) rule-based suitability scorer.
-
-    Weights are assigned based on expert knowledge and literature for
-    check dam siting in semi-arid India. This is the baseline that the
-    ML models must beat to be considered useful.
-
-    Weights sum to 1.0. Higher weight = more important criterion.
-
-    References:
-        Mukherjee et al. (2012), Nitheshnirmal et al. (2019)
-        (Do NOT cite these without verifying they contain this method.)
-    """
-
-    # Feature → (weight, direction, optimal_range_or_class)
-    # direction: +1 means higher raw value → higher score, -1 means inverse
-    WEIGHTS = {
-        "slope_deg":           0.20,   # moderate slope preferred (~5–15°)
-        "flow_accum":          0.20,   # higher flow → more water
-        "twi":                 0.15,   # higher TWI → better wetness
-        "annual_rainfall_mm":  0.15,   # higher rainfall → more storage
-        "soil_texture_class":  0.12,   # clay/loamy preferred (higher class)
-        "geology_permeability":0.08,   # lower permeability → less seepage loss
-        "dist_to_road_m":      0.05,   # closer to road → lower cost
-        "ndvi":                0.05,   # moderate NDVI preferred
-    }
-
-    def score(self, df: pd.DataFrame) -> np.ndarray:
-        """
-        Compute AHP suitability score (0–1) for each row.
-
-        Returns
-        -------
-        np.ndarray of shape (n_samples,) with scores in [0, 1].
-        """
-        scores = np.zeros(len(df))
-
-        # Slope: optimal 5–15°, penalise <3° and >25°
-        slope_norm = np.where(
-            (df["slope_deg"] >= 5) & (df["slope_deg"] <= 15), 1.0,
-            np.where(df["slope_deg"] < 3, 0.2,
-            np.where(df["slope_deg"] > 25, 0.1, 0.5))
-        )
-        scores += self.WEIGHTS["slope_deg"] * slope_norm
-
-        # Flow accumulation: log-normalise
-        fa_log = np.log1p(df["flow_accum"])
-        scores += self.WEIGHTS["flow_accum"] * (fa_log / fa_log.max())
-
-        # TWI: normalise
-        twi_norm = (df["twi"] - df["twi"].min()) / (df["twi"].max() - df["twi"].min() + 1e-9)
-        scores += self.WEIGHTS["twi"] * twi_norm
-
-        # Rainfall: normalise
-        rf_norm = (df["annual_rainfall_mm"] - df["annual_rainfall_mm"].min()) / (
-            df["annual_rainfall_mm"].max() - df["annual_rainfall_mm"].min() + 1e-9
-        )
-        scores += self.WEIGHTS["annual_rainfall_mm"] * rf_norm
-
-        # Soil texture: clay=3 best, sandy=1 worst
-        soil_norm = (df["soil_texture_class"] - 1) / 2.0
-        scores += self.WEIGHTS["soil_texture_class"] * soil_norm
-
-        # Geology permeability: LOW permeability (class 1) is BEST (less seepage)
-        geo_norm = (3 - df["geology_permeability"]) / 2.0
-        scores += self.WEIGHTS["geology_permeability"] * geo_norm
-
-        # Distance to road: closer = better (inverse)
-        dist_norm = 1.0 - (df["dist_to_road_m"] - df["dist_to_road_m"].min()) / (
-            df["dist_to_road_m"].max() - df["dist_to_road_m"].min() + 1e-9
-        )
-        scores += self.WEIGHTS["dist_to_road_m"] * dist_norm
-
-        # NDVI: moderate preferred (peak at 0.35–0.55)
-        ndvi_norm = 1.0 - np.abs(df["ndvi"] - 0.45) / 0.55
-        ndvi_norm = ndvi_norm.clip(0, 1)
-        scores += self.WEIGHTS["ndvi"] * ndvi_norm
-
-        return scores.clip(0, 1)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ML Model Wrapper
-# ─────────────────────────────────────────────────────────────────────────────
-
-class CheckDamModel:
-    """
-    Wrapper around RandomForest or XGBoost for check dam suitability scoring.
+    Build a leak-free ColumnTransformer for continuous and categorical features.
 
     Parameters
     ----------
-    model_type      : 'random_forest' or 'xgboost'
-    structure_type  : 'check_dam' (reserved for future: 'farm_pond', 'percolation_tank')
-    random_seed     : For reproducibility
-    """
-
-    SUPPORTED_MODELS = ("random_forest", "xgboost")
-
-    def __init__(
-        self,
-        model_type: Literal["random_forest", "xgboost"] = "random_forest",
-        structure_type: str = "check_dam",
-        random_seed: int = 42,
-    ):
-        if model_type not in self.SUPPORTED_MODELS:
-            raise ValueError(f"model_type must be one of {self.SUPPORTED_MODELS}")
-        if model_type == "xgboost" and not _XGB_AVAILABLE:
-            raise ImportError("xgboost not installed. Run: pip install xgboost")
-
-        self.model_type = model_type
-        self.structure_type = structure_type
-        self.random_seed = random_seed
-        self.model = self._build_model()
-        self.feature_cols = FEATURE_COLS
-        self.is_fitted = False
-
-    def _build_model(self):
-        if self.model_type == "random_forest":
-            return RandomForestClassifier(
-                n_estimators=300,
-                max_depth=None,
-                min_samples_leaf=5,
-                class_weight="balanced",  # handles class imbalance
-                random_state=self.random_seed,
-                n_jobs=-1,
-            )
-        elif self.model_type == "xgboost":
-            return xgb.XGBClassifier(
-                n_estimators=300,
-                max_depth=6,
-                learning_rate=0.05,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                scale_pos_weight=3,  # compensates for ~25% positive class
-                random_state=self.random_seed,
-                eval_metric="logloss",
-                use_label_encoder=False,
-            )
-
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "CheckDamModel":
-        """Train the model on the full feature matrix and labels."""
-        self.model.fit(X[self.feature_cols], y)
-        self.is_fitted = True
-        return self
-
-    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
-        """Return suitability probability (class 1) for each row."""
-        if not self.is_fitted:
-            raise RuntimeError("Call fit() before predict_proba().")
-        return self.model.predict_proba(X[self.feature_cols])[:, 1]
-
-    def feature_importance(self) -> pd.DataFrame:
-        """Return feature importances as a sorted DataFrame."""
-        if not self.is_fitted:
-            raise RuntimeError("Call fit() before feature_importance().")
-        importances = self.model.feature_importances_
-        return (
-            pd.DataFrame({"feature": self.feature_cols, "importance": importances})
-            .sort_values("importance", ascending=False)
-            .reset_index(drop=True)
-        )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Spatial Block Cross-Validation
-# ─────────────────────────────────────────────────────────────────────────────
-
-def spatial_block_cv(
-    df: pd.DataFrame,
-    model: CheckDamModel,
-    n_blocks: Optional[int] = None,
-) -> pd.DataFrame:
-    """
-    Leave-one-block-out spatial cross-validation.
-
-    Splits data by `spatial_block` column (not randomly). Each fold uses
-    one block as the test set and all other blocks as the training set.
-    This avoids spatial autocorrelation inflating performance metrics.
-
-    Parameters
-    ----------
-    df      : DataFrame with FEATURE_COLS, LABEL_COL, BLOCK_COL
-    model   : CheckDamModel instance (will be re-initialised for each fold)
-    n_blocks: If None, uses all unique blocks.
+    base_features : list of str
+        Continuous numeric features (e.g. slope, twi, rainfall, flow_accum).
+    categorical_features : list of str
+        Categorical features to one-hot encode (e.g. lulc_class, soil_texture, lithology).
+    include_ahp : bool
+        If True, appends 'ahp_score' as an extra numeric feature (for Step 4).
 
     Returns
     -------
-    DataFrame with one row per fold: block_id, auc, precision, recall, f1, n_test
+    preprocessor : ColumnTransformer
+    feature_list : list of str
     """
-    blocks = sorted(df[BLOCK_COL].unique())
-    if n_blocks is not None:
-        blocks = blocks[:n_blocks]
+    numeric_cols = list(base_features)
+    if include_ahp:
+        numeric_cols.append("ahp_score")
 
-    results = []
-    for block_id in blocks:
-        train_mask = df[BLOCK_COL] != block_id
-        test_mask  = df[BLOCK_COL] == block_id
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("num", "passthrough", numeric_cols),
+            ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), categorical_features),
+        ]
+    )
+    all_cols = numeric_cols + list(categorical_features)
+    return preprocessor, all_cols
 
-        X_train = df.loc[train_mask, FEATURE_COLS]
-        y_train = df.loc[train_mask, LABEL_COL]
-        X_test  = df.loc[test_mask,  FEATURE_COLS]
-        y_test  = df.loc[test_mask,  LABEL_COL]
 
-        if y_test.nunique() < 2:
-            print(f"  Block {block_id}: skipped (only one class in test set)")
-            continue
+def build_classifier(
+    model_type: str,
+    config: dict,
+    scale_pos_weight: Optional[float] = None,
+):
+    """
+    Build an un-fitted classifier with parameters from config.yaml.
 
-        # Re-build and train a fresh model for each fold
-        fold_model = CheckDamModel(
-            model_type=model.model_type,
-            structure_type=model.structure_type,
-            random_seed=model.random_seed,
+    Parameters
+    ----------
+    model_type : 'random_forest' or 'xgboost'
+    config : dict
+        Loaded project configuration.
+    scale_pos_weight : float, optional
+        Ratio of negative to positive training samples for XGBoost.
+    """
+    ml_cfg = config.get("ml", {})
+    if model_type == "random_forest":
+        rf_params = ml_cfg.get("random_forest", {})
+        return RandomForestClassifier(
+            n_estimators=rf_params.get("n_estimators", 250),
+            max_depth=rf_params.get("max_depth", 8),
+            min_samples_leaf=rf_params.get("min_samples_leaf", 6),
+            class_weight=rf_params.get("class_weight", "balanced"),
+            random_state=rf_params.get("random_state", 42),
+            n_jobs=rf_params.get("n_jobs", -1),
         )
-        fold_model.fit(X_train, y_train)
-        y_prob = fold_model.predict_proba(X_test)
-        y_pred = (y_prob >= 0.5).astype(int)
+    elif model_type == "xgboost":
+        if not _XGB_AVAILABLE:
+            raise ImportError("xgboost is not installed. Install via pip install xgboost.")
+        xgb_params = ml_cfg.get("xgboost", {})
+        spw = scale_pos_weight if scale_pos_weight is not None else xgb_params.get("scale_pos_weight", 3.0)
+        return xgb.XGBClassifier(
+            n_estimators=xgb_params.get("n_estimators", 250),
+            max_depth=xgb_params.get("max_depth", 4),
+            learning_rate=xgb_params.get("learning_rate", 0.04),
+            subsample=xgb_params.get("subsample", 0.8),
+            colsample_bytree=xgb_params.get("colsample_bytree", 0.8),
+            scale_pos_weight=spw,
+            random_state=xgb_params.get("random_state", 42),
+            eval_metric=xgb_params.get("eval_metric", "logloss"),
+        )
+    else:
+        raise ValueError(f"Unsupported model_type: {model_type}. Choose 'random_forest' or 'xgboost'.")
 
-        results.append({
-            "block_id":  block_id,
-            "auc":       roc_auc_score(y_test, y_prob),
-            "precision": precision_score(y_test, y_pred, zero_division=0),
-            "recall":    recall_score(y_test, y_pred, zero_division=0),
-            "f1":        f1_score(y_test, y_pred, zero_division=0),
-            "n_test":    len(y_test),
+
+def find_optimal_threshold(
+    y_true: np.ndarray,
+    y_prob: np.ndarray,
+    thresholds: Optional[np.ndarray] = None,
+) -> float:
+    """
+    Find probability decision threshold that maximizes F1 score on training folds.
+
+    Parameters
+    ----------
+    y_true : 1D array of binary true labels
+    y_prob : 1D array of predicted probabilities
+
+    Returns
+    -------
+    best_threshold : float
+    """
+    if thresholds is None:
+        thresholds = np.linspace(0.10, 0.90, 81)
+
+    best_thresh = 0.50
+    best_f1 = -1.0
+
+    for thresh in thresholds:
+        preds = (y_prob >= thresh).astype(int)
+        score = f1_score(y_true, preds, zero_division=0)
+        if score > best_f1:
+            best_f1 = score
+            best_thresh = float(thresh)
+
+    return best_thresh
+
+
+def run_spatial_block_cv(
+    df: pd.DataFrame,
+    model_type: str,
+    config: Optional[dict] = None,
+    include_ahp: bool = False,
+) -> Tuple[pd.DataFrame, pd.Series]:
+    """
+    Run leave-one-spatial-block-out cross validation grouped by block_id.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Candidates table (must have block_id, label, and feature columns).
+    model_type : 'random_forest' or 'xgboost'
+    config : dict, optional
+    include_ahp : bool
+        If True, adds ahp_score as a feature (Method A, Step 4).
+        If False, ML-only (Step 3).
+
+    Returns
+    -------
+    fold_metrics_df : pd.DataFrame
+        Per-fold validation metrics (AUC-ROC, PR-AUC, precision, recall, F1, optimal_threshold).
+    oof_predictions : pd.Series
+        Out-of-fold predicted probabilities for every candidate site (aligned with df.index).
+    """
+    if config is None:
+        config = load_config()
+
+    ml_cfg = config.get("ml", {})
+    block_col = ml_cfg.get("block_column", "block_id")
+    label_col = ml_cfg.get("label_column", "label")
+    base_feats = ml_cfg.get("base_features", [])
+    cat_feats = ml_cfg.get("categorical_features", [])
+
+    blocks = sorted(df[block_col].unique())
+    oof_probs = pd.Series(index=df.index, dtype=float)
+    fold_records = []
+
+    for fold_num, holdout_block in enumerate(blocks, start=1):
+        # ── 1. Create Train / Test Masks (Strict Spatial Isolation) ───────────
+        train_mask = df[block_col] != holdout_block
+        test_mask = df[block_col] == holdout_block
+
+        # Assert no spatial block leakage between train and test
+        train_blocks = set(df.loc[train_mask, block_col].unique())
+        test_blocks = set(df.loc[test_mask, block_col].unique())
+        assert train_blocks.isdisjoint(test_blocks), (
+            f"Spatial leakage detected! Fold {fold_num}: Train blocks {train_blocks} intersect Test blocks {test_blocks}"
+        )
+
+        # ── 2. Split Features & Labels ────────────────────────────────────────
+        preprocessor, feature_cols = build_preprocessor(base_feats, cat_feats, include_ahp=include_ahp)
+
+        X_train_raw = df.loc[train_mask, feature_cols]
+        y_train = df.loc[train_mask, label_col].values
+        X_test_raw = df.loc[test_mask, feature_cols]
+        y_test = df.loc[test_mask, label_col].values
+
+        # Fit preprocessor on training data only
+        X_train_proc = preprocessor.fit_transform(X_train_raw)
+        X_test_proc = preprocessor.transform(X_test_raw)
+
+        # Compute dynamic scale_pos_weight for XGBoost on training fold
+        n_pos = int(y_train.sum())
+        n_neg = len(y_train) - n_pos
+        scale_pos_weight = (n_neg / n_pos) if n_pos > 0 else 1.0
+
+        # ── 3. Train Classifier ───────────────────────────────────────────────
+        model = build_classifier(model_type, config, scale_pos_weight=scale_pos_weight)
+        model.fit(X_train_proc, y_train)
+
+        # ── 4. Optimize Decision Threshold on Train Fold ──────────────────────
+        y_train_probs = model.predict_proba(X_train_proc)[:, 1]
+        best_threshold = find_optimal_threshold(y_train, y_train_probs)
+
+        # ── 5. Predict on Held-Out Test Block ─────────────────────────────────
+        y_test_probs = model.predict_proba(X_test_proc)[:, 1]
+        oof_probs.loc[test_mask] = y_test_probs
+
+        # Apply training-derived threshold to held-out test predictions
+        y_test_preds = (y_test_probs >= best_threshold).astype(int)
+
+        auc = roc_auc_score(y_test, y_test_probs)
+        pr_auc = average_precision_score(y_test, y_test_probs)
+        prec = precision_score(y_test, y_test_preds, zero_division=0)
+        rec = recall_score(y_test, y_test_preds, zero_division=0)
+        f1 = f1_score(y_test, y_test_preds, zero_division=0)
+
+        fold_records.append({
+            "model": f"{model_type}_{'with_ahp' if include_ahp else 'ml_only'}",
+            "fold": fold_num,
+            "holdout_block": holdout_block,
+            "n_train": len(y_train),
+            "n_test": len(y_test),
+            "test_positives": int(y_test.sum()),
+            "best_threshold": round(best_threshold, 3),
+            "auc_roc": round(auc, 4),
+            "pr_auc": round(pr_auc, 4),
+            "precision": round(prec, 4),
+            "recall": round(rec, 4),
+            "f1": round(f1, 4),
         })
-        print(f"  Block {block_id}: AUC={results[-1]['auc']:.3f}  "
-              f"P={results[-1]['precision']:.3f}  R={results[-1]['recall']:.3f}")
 
-    return pd.DataFrame(results)
+    fold_metrics_df = pd.DataFrame(fold_records)
+    return fold_metrics_df, oof_probs
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SHAP Explanation
-# ─────────────────────────────────────────────────────────────────────────────
-
-def compute_shap_values(
-    model: CheckDamModel,
-    X: pd.DataFrame,
-    max_display: int = 10,
-) -> Optional[object]:
+def run_step3_ml_only(config: Optional[dict] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Compute SHAP values for a fitted model.
+    Execute Step 3: Train Random Forest and XGBoost ML-only models with Spatial CV.
 
-    Parameters
-    ----------
-    model       : Fitted CheckDamModel
-    X           : Feature DataFrame
-    max_display : Max features to show in summary plot
-
-    Returns
-    -------
-    shap.Explanation object, or None if shap is not installed.
+    Saves:
+      - outputs/stage1b_oof_ml_only.csv
     """
-    if not _SHAP_AVAILABLE:
-        print("⚠️  shap not installed. Run: pip install shap")
-        return None
-    if not model.is_fitted:
-        raise RuntimeError("Call fit() before compute_shap_values().")
+    if config is None:
+        config = load_config()
 
-    explainer = shap.TreeExplainer(model.model)
-    shap_values = explainer(X[model.feature_cols])
-    return shap_values
+    project_root = Path(__file__).resolve().parent.parent
+    candidates_path = project_root / config["paths"]["candidates_ahp_csv"]
+    if not candidates_path.exists():
+        candidates_path = project_root / config["paths"]["candidates_filtered_csv"]
+
+    print("=" * 65)
+    print("STAGE 1b - STEP 3: ML-ONLY MODELS WITH SPATIAL CROSS-VALIDATION")
+    print("=" * 65)
+    print(f"Loading candidates: {candidates_path.relative_to(project_root)}")
+    df = pd.read_csv(candidates_path)
+
+    # 1. Random Forest ML-Only
+    print("\nRunning Spatial CV: Random Forest (ML-Only)...")
+    rf_folds, rf_oof = run_spatial_block_cv(df, "random_forest", config=config, include_ahp=False)
+
+    # 2. XGBoost ML-Only
+    print("Running Spatial CV: XGBoost (ML-Only)...")
+    xgb_folds, xgb_oof = run_spatial_block_cv(df, "xgboost", config=config, include_ahp=False)
+
+    all_folds = pd.concat([rf_folds, xgb_folds], ignore_index=True)
+
+    # 3. Assemble Out-of-Fold Predictions Table
+    oof_df = pd.DataFrame({
+        "site_id": df["site_id"],
+        "block_id": df["block_id"],
+        "lat": df["lat"],
+        "lon": df["lon"],
+        "label": df["label"],
+        "rf_prob_ml_only": rf_oof.round(4),
+        "xgb_prob_ml_only": xgb_oof.round(4),
+    })
+    if "ahp_score" in df.columns:
+        oof_df["ahp_score"] = df["ahp_score"]
+
+    oof_out = project_root / config["paths"]["oof_ml_only_csv"]
+    oof_out.parent.mkdir(parents=True, exist_ok=True)
+    oof_df.to_csv(oof_out, index=False)
+
+    print("\nOut-of-Fold Spatial CV Summary (Mean +/- Std):")
+    summary = all_folds.groupby("model")[["auc_roc", "pr_auc", "precision", "recall", "f1"]].agg(
+        ["mean", "std"]
+    ).round(3)
+    print(summary.to_string())
+
+    print(f"\n✅ Out-of-fold predictions saved to: {oof_out.relative_to(project_root)}")
+    print("\n[SYNTHETIC - pipeline test, not a real finding]")
+    return all_folds, oof_df
 
 
-def evaluate_ahp_vs_ml(
-    df: pd.DataFrame,
-    ml_model: CheckDamModel,
-    threshold: float = 0.5,
-) -> pd.DataFrame:
-    """
-    Compare AHP baseline vs trained ML model on the same dataset.
+def main():
+    parser = argparse.ArgumentParser(description="Run ML suitability models with spatial CV.")
+    parser.add_argument("--config", type=str, default="config.yaml", help="Path to config.yaml")
+    args = parser.parse_args()
 
-    Returns a comparison DataFrame with AUC, precision, recall for both.
-    """
-    ahp = AHPScorer()
-    ahp_scores = ahp.score(df)
-    ml_probs   = ml_model.predict_proba(df)
-    y_true     = df[LABEL_COL].values
+    project_root = Path(__file__).resolve().parent.parent
+    config = load_config(project_root / args.config)
+    run_step3_ml_only(config=config)
 
-    def metrics(scores, label):
-        preds = (scores >= threshold).astype(int)
-        return {
-            "model":     label,
-            "auc":       roc_auc_score(y_true, scores),
-            "precision": precision_score(y_true, preds, zero_division=0),
-            "recall":    recall_score(y_true, preds, zero_division=0),
-            "f1":        f1_score(y_true, preds, zero_division=0),
-        }
 
-    return pd.DataFrame([
-        metrics(ahp_scores, "AHP Baseline"),
-        metrics(ml_probs,   f"ML ({ml_model.model_type})"),
-    ])
+if __name__ == "__main__":
+    main()

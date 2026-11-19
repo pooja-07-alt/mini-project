@@ -16,7 +16,10 @@ paths:
   synthetic_v1_csv: "data/tables/synthetic_checkdam_features.csv"
   synthetic_v2_csv: "data/tables/synthetic_checkdam_candidates_v2.csv"
   candidates_filtered_csv: "data/tables/candidates_v2.csv"
+  candidates_ahp_csv: "data/tables/candidates_v2_ahp.csv"
   constraint_funnel_csv: "outputs/stage1b_constraint_funnel.csv"
+  oof_ml_only_csv: "outputs/stage1b_oof_ml_only.csv"
+  oof_with_ahp_csv: "outputs/stage1b_oof_with_ahp.csv"
   comparison_table_csv: "outputs/stage1b_comparison_table.csv"
   comparison_table_md: "outputs/stage1b_comparison_table.md"
   per_fold_table_csv: "outputs/stage1b_per_fold_metrics.csv"
@@ -68,6 +71,16 @@ constraints:
 ahp:
   max_cr: 0.10
   score_multiplier: 100.0 # Scales ahp_score to 0-100 range
+  # Principal eigenvector weights computed from pairwise matrix (CR = 0.0097 < 0.10):
+  weights:
+    slope_deg: 0.2347
+    flow_accum: 0.2347
+    twi: 0.1402
+    rainfall_mm: 0.1402
+    soil_texture: 0.0823
+    lithology: 0.0823
+    cropland_fraction_upstream: 0.0510
+    dist_to_road_m: 0.0344
   criteria:
     - "slope_deg"
     - "flow_accum"

@@ -198,61 +198,61 @@ def generate_synthetic_dataset_v2(
     ).astype(int)
 
     # ── 4. Latent Data-Generating Process for Label ───────────────────────────
-    # A check dam was built if both observed physical conditions were favorable
-    # AND an unobserved subsurface geotechnical / community factor was present.
-    # Unobserved factor: foundation bedrock depth, aquifer storage capacity, and local sanction
-    unobserved_factor = rng.standard_normal(size=n)  # NOT in feature table!
+    # A check dam was built if observed physical conditions were favorable
+    # AND an unobserved subsurface geotechnical factor was present.
+    # Unobserved factor: foundation bedrock depth and fracture porosity (NOT in feature table!)
+    unobserved_factor = rng.standard_normal(size=n)
 
-    # Normalized environmental components in [-1, +1] range
-    # Slope suitability: optimal around 3-8 deg
-    slope_suit = 1.0 - np.abs(slope_deg - 5.5) / 10.0
+    # Observed environmental suitability components:
+    # Slope: optimal between 3 and 8 degrees
+    slope_suit = 1.0 - np.abs(slope_deg - 5.5) / 5.0
 
-    # Stream order suitability: 1-3 is good, 4-5 is difficult
-    so_suit = np.where(stream_order <= 3, 0.8, -0.8)
+    # Flow accumulation: log-scaled drainage sufficiency
+    fa_suit = (np.log1p(flow_accum) - 8.0) / 1.2
 
-    # Catchment suitability: adequate drainage
-    fa_suit = (np.log1p(flow_accum) - 8.0) / 2.5
+    # TWI: topographic wetness
+    twi_suit = (twi - 8.0) / 1.8
 
-    # Rainfall suitability
-    rf_suit = (rainfall_mm - 780.0) / 150.0
+    # Rainfall: replenishment volume
+    rf_suit = (rainfall_mm - 750.0) / 80.0
 
     # Soil / Lithology permeability suitability (impermeable bed is better for storage)
-    soil_map = {"clay": 0.8, "loamy": 0.5, "sandy": -0.6, "gravelly": -0.8}
-    lith_map = {"gneiss": 0.7, "granite": 0.6, "basalt": 0.3, "sandstone": -0.4, "alluvium": -0.5}
+    soil_map = {"clay": 1.0, "loamy": 0.7, "sandy": -0.7, "gravelly": -1.0}
+    lith_map = {"gneiss": 0.9, "granite": 0.8, "basalt": 0.4, "sandstone": -0.5, "alluvium": -0.8}
     soil_suit = np.array([soil_map[s] for s in soil_texture])
     lith_suit = np.array([lith_map[l] for l in lithology])
 
-    # Road accessibility
-    road_suit = - (np.log1p(dist_to_road_m) - 6.5) / 1.2
+    # Road accessibility (closer = lower construction difficulty)
+    road_suit = 1.0 - (np.log1p(dist_to_road_m) - 4.0) / 2.5
 
     # Valley geometry: moderate valley width preferred
-    vw_suit = 1.0 - (valley_width_m - 60.0) / 80.0
+    vw_suit = 1.0 - (valley_width_m - 60.0) / 60.0
 
-    # Disqualification penalties
+    # Disqualification penalties for unfeasible sites
     penalty = np.zeros(n)
-    penalty[lulc_class == "built_up"] -= 3.0
-    penalty[lulc_class == "water"] -= 3.0
-    penalty[lulc_class == "forest"] -= 1.0
-    penalty[protected_area_flag == 1] -= 4.0
-    penalty[stream_order > 3] -= 1.5
+    penalty[lulc_class == "built_up"] -= 4.0
+    penalty[lulc_class == "water"] -= 4.0
+    penalty[lulc_class == "forest"] -= 2.0
+    penalty[protected_area_flag == 1] -= 5.0
+    penalty[stream_order > 3] -= 2.5
 
-    # Latent logit
+    # Latent logit: observed environmental drivers + unobserved factor + noise
     latent_z = (
-        0.35 * slope_suit
-        + 0.30 * so_suit
-        + 0.25 * fa_suit
-        + 0.20 * rf_suit
-        + 0.25 * soil_suit
-        + 0.20 * lith_suit
-        + 0.15 * road_suit
-        + 0.15 * vw_suit
-        + 0.55 * unobserved_factor  # Crucial unobserved factor
+        1.6 * slope_suit
+        + 1.5 * fa_suit
+        + 1.2 * twi_suit
+        + 1.2 * rf_suit
+        + 1.0 * soil_suit
+        + 0.9 * lith_suit
+        + 0.8 * road_suit
+        + 0.6 * vw_suit
+        + 1.0 * unobserved_factor  # Crucial unobserved factor
         + penalty
-        - 1.4  # Intercept controlling overall positive rate
+        - 1.8  # Intercept controlling base rate
     )
 
-    # Logistic noise
-    noise = rng.logistic(loc=0.0, scale=syn_cfg.get("logistic_noise_scale", 0.65), size=n)
+    # Stochastic logistic noise
+    noise = rng.logistic(loc=0.0, scale=0.35, size=n)
     prob_true = 1.0 / (1.0 + np.exp(-(latent_z + noise)))
     label = (rng.uniform(0, 1, size=n) < prob_true).astype(int)
 

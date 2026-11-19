@@ -178,6 +178,22 @@ AHP provides a defensible multi-criteria framework rooted in matrix algebra rath
 
 **Status:** SYNTHETIC - pipeline test, not a real finding.
 
+### D-12: ML-Only Models with Spatial Block Cross-Validation (Step 3)
+
+**Options considered:**
+- A) Standard k-fold random cross-validation.
+- B) Leave-one-spatial-block-out cross-validation grouped strictly by `block_id` (8 spatial blocks).
+
+**Choice:** B
+
+**Reason:**
+1. Random train-test splits on geospatial data cause severe data leakage because adjacent stream cells share terrain, soil, and precipitation features. The model memorizes regional patterns rather than learning transferable hydrological principles.
+2. Under leave-one-block-out CV, each of the 8 geographic zones is held out entirely as an unseen test region. The training fold never sees any pixel from the test block, and categorical encoders are fitted strictly on the training fold.
+3. Class imbalance is handled via `class_weight="balanced"` in Random Forest and dynamically calculated `scale_pos_weight` ($n_{\text{neg}} / n_{\text{pos}}$ on the training fold) in XGBoost.
+4. Threshold selection: To avoid optimistic test evaluation, the probability classification threshold is selected on the training fold by maximizing the F1 score, then frozen and applied to the held-out test fold.
+
+**Status:** SYNTHETIC - pipeline test, not a real finding.
+
 ---
 
 ## Stage 2 Decisions

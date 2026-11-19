@@ -123,6 +123,22 @@ Instead of guessing weights directly out of thin air (e.g. "I think slope is 0.2
 3. **The Principal Eigenvector:** A mathematical theorem (the Perron-Frobenius theorem) proves that the unique vector representing the true underlying ranking of all factors simultaneously is the principal eigenvector of this matrix.
 4. **Consistency Ratio (CR):** Humans can make logically contradictory judgements (e.g. saying A > B, B > C, but C > A). The Consistency Ratio measures how much contradiction exists in your judgements compared to purely random guesses. Saaty established that if $CR < 0.10$ (less than 10% inconsistency), the judgements are mathematically consistent and trustworthy.
 
+### Why do we tune the decision threshold on the training fold instead of the test fold?
+
+Most beginners evaluate binary classification using a fixed 0.50 cutoff: if predicted probability $\ge 0.50$, predict 1, else 0.
+However, when classes are imbalanced (e.g. only 30% of stream candidates are good check dam sites), 0.50 is rarely the optimal threshold.
+- If you look at the **test fold** to pick the threshold that gives the highest test F1, you are **cheating (data leakage)**! You used the test answers to pick your decision rule.
+- Instead, in rigorous machine learning:
+  1. We evaluate different thresholds ($0.10, 0.11, \dots, 0.90$) strictly on the **training fold** to find which threshold maximizes training F1.
+  2. We freeze that chosen threshold and apply it blindly to the **held-out test block**.
+This guarantees an honest estimate of how the decision rule performs on genuinely unseen terrain.
+
+### How does spatial cross-validation prevent geographical data leakage?
+
+If two candidate sites are 100 metres apart along the same valley, they share almost identical elevation, rainfall, soil type, and distance to roads.
+- If you use a random 80/20 train/test split, site A might be in the training set and site B in the test set. The model can get high test accuracy simply by "remembering" what the valley looked like around site A.
+- **Spatial CV** solves this by cutting the map into distinct spatial blocks. When Block 3 is tested, the model is trained only on Blocks 1, 2, 4, 5, 6, 7, and 8. The model must predict suitability in an entire unfamiliar region without relying on spatial neighbor memory.
+
 ---
 
 ## Stage 2 — Study Area & Data

@@ -20,6 +20,7 @@ from pathlib import Path
 from src.generate_synthetic import generate_synthetic_dataset_v2, load_config
 from src.constraints import apply_hard_constraints
 from src.ahp import AHPScorer, compute_eigenvector_weights
+from src.ml_model import run_spatial_block_cv, run_step3_ml_only
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -154,5 +155,67 @@ def test_ahp_no_label_usage():
     assert isinstance(scores, np.ndarray)
     assert len(scores) == len(df_no_label)
     assert np.all((scores >= 0.0) & (scores <= 100.0))
+
+
+def test_ahp_candidates_output_file():
+    """Verify that candidates_v2_ahp.csv exists and contains ahp_score."""
+    ahp_candidates_path = PROJECT_ROOT / "data" / "tables" / "candidates_v2_ahp.csv"
+    assert ahp_candidates_path.exists(), "candidates_v2_ahp.csv does not exist"
+    df = pd.read_csv(ahp_candidates_path)
+    assert "ahp_score" in df.columns
+    assert len(df) > 0
+    assert df["ahp_score"].notna().all()
+
+
+def test_spatial_block_cv_no_leakage():
+    """Verify that no block appears in both train and test of any fold, preventing data leakage."""
+    ahp_candidates_path = PROJECT_ROOT / "data" / "tables" / "candidates_v2_ahp.csv"
+    df = pd.read_csv(ahp_candidates_path)
+    blocks = sorted(df["block_id"].unique())
+    assert len(blocks) >= 8
+
+    tested_sites = set()
+    for block in blocks:
+        train_mask = df["block_id"] != block
+        test_mask = df["block_id"] == block
+
+        train_blocks = set(df.loc[train_mask, "block_id"].unique())
+        test_blocks = set(df.loc[test_mask, "block_id"].unique())
+
+        # Strict isolation assert
+        assert train_blocks.isdisjoint(test_blocks), (
+            f"Block leakage detected! Train blocks {train_blocks} intersect Test block {test_blocks}"
+        )
+        assert block not in train_blocks
+        assert test_blocks == {block}
+
+        # Site isolation
+        train_sites = set(df.loc[train_mask, "site_id"])
+        test_sites = set(df.loc[test_mask, "site_id"])
+        assert train_sites.isdisjoint(test_sites)
+
+        # Track that each site is evaluated exactly once in test sets
+        assert tested_sites.isdisjoint(test_sites)
+        tested_sites.update(test_sites)
+
+    # All candidate sites must be tested across the 8 folds
+    assert tested_sites == set(df["site_id"])
+
+
+def test_oof_ml_only_predictions():
+    """Verify out-of-fold ML-only predictions table exists and has valid probabilities."""
+    oof_path = PROJECT_ROOT / "outputs" / "stage1b_oof_ml_only.csv"
+    assert oof_path.exists(), "stage1b_oof_ml_only.csv does not exist"
+    df_oof = pd.read_csv(oof_path)
+    for col in ["site_id", "block_id", "label", "rf_prob_ml_only", "xgb_prob_ml_only"]:
+        assert col in df_oof.columns, f"Missing column {col} in oof predictions"
+
+    assert len(df_oof) > 0
+    assert df_oof["rf_prob_ml_only"].between(0.0, 1.0).all()
+    assert df_oof["xgb_prob_ml_only"].between(0.0, 1.0).all()
+    assert not df_oof["rf_prob_ml_only"].isna().any()
+    assert not df_oof["xgb_prob_ml_only"].isna().any()
+
+
 
 

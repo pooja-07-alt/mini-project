@@ -114,6 +114,34 @@
   - Exact eigenvector weight normalization and CR computation.
   - Exception raised loudly when evaluating an inconsistent matrix.
   - Zero label usage: `ahp_score` executes cleanly when `label` column is removed.
+  - Output candidate file with AHP score saved to `data/tables/candidates_v2_ahp.csv`.
+  - AHP score distribution: Min: 41.66, Median: 61.60, Max: 78.23, Mean: 61.47.
+- Status: SYNTHETIC - pipeline test, not a real finding.
+
+### Step 3: ML-Only Models with Spatial Cross-Validation ✅
+- Implemented `run_spatial_block_cv()` and `run_step3_ml_only()` in `src/ml_model.py`.
+- Trained Random Forest and XGBoost across 8 spatial blocks (leave-one-block-out CV):
+  - Strictly excluded `ahp_score` from features (ML-only baseline).
+  - One-hot encoded categorical variables (`lulc_class`, `soil_texture`, `lithology`) fitted exclusively on training folds.
+  - Handled class imbalance using `class_weight="balanced"` (RF) and dynamically calculated `scale_pos_weight` (XGBoost).
+  - Selected decision threshold on the training fold by maximizing F1 score, then applied to the held-out test block.
+- Out-of-fold spatial CV performance (mean ± std across 8 blocks):
+  - **Random Forest (ML-only):**
+    - AUC-ROC: **0.736 ± 0.061**
+    - PR-AUC: **0.782 ± 0.082**
+    - Precision: **0.734 ± 0.062**
+    - Recall: **0.754 ± 0.135**
+    - F1: **0.739 ± 0.079**
+  - **XGBoost (ML-only):**
+    - AUC-ROC: **0.721 ± 0.049**
+    - PR-AUC: **0.766 ± 0.075**
+    - Precision: **0.725 ± 0.081**
+    - Recall: **0.725 ± 0.114**
+    - F1: **0.720 ± 0.075**
+- Exported out-of-fold predicted probabilities for every candidate site to `outputs/stage1b_oof_ml_only.csv`.
+- Added unit tests verifying:
+  - Complete block and site disjointness between train and test sets in all folds.
+  - Validity and bounds of out-of-fold probability predictions.
 - Status: SYNTHETIC - pipeline test, not a real finding.
 
 ---

@@ -276,8 +276,19 @@ def main():
 
     df = pd.read_csv(in_candidates)
     scores = scorer.score(df)
+    df["ahp_score"] = scores
+
+    out_ahp = project_root / config["paths"]["candidates_ahp_csv"]
+    out_ahp.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(out_ahp, index=False)
+
     print(f"\nEvaluated {len(scores)} candidate sites.")
-    print(f"AHP Score range: [{scores.min():.2f}, {scores.max():.2f}], Mean: {scores.mean():.2f}")
+    print(f"AHP Score distribution:")
+    print(f"  Min:    {scores.min():.2f}")
+    print(f"  Median: {float(np.median(scores)):.2f}")
+    print(f"  Max:    {scores.max():.2f}")
+    print(f"  Mean:   {scores.mean():.2f}")
+    print(f"\n✅ Candidates with ahp_score saved to: {out_ahp.relative_to(project_root)}")
     print("\n[SYNTHETIC - pipeline test, not a real finding]")
 
 
