@@ -103,6 +103,19 @@
 - Added unit tests for hand-made rows verifying each rule independently.
 - Status: SYNTHETIC - pipeline test, not a real finding.
 
+### Step 2: AHP Scoring with Eigenvector Weights & CR Verification ✅
+- Implemented `src/ahp.py` with `AHPScorer` and `compute_eigenvector_weights()`.
+- Built an 8-factor pairwise comparison matrix loaded from `config.yaml`:
+  - Principal eigenvalue $\lambda_{\max} = 8.0961$.
+  - Consistency Ratio $CR = 0.0097 < 0.10$ (fully consistent, passes Saaty's criterion).
+  - Derived priority weights: slope (23.5%), flow accumulation (23.5%), TWI (14.0%), rainfall (14.0%), soil (8.2%), lithology (8.2%), cropland upstream (5.1%), road distance (3.4%).
+- Converted continuous features to physical [0, 1] fit scores and scaled `ahp_score` to [0, 100].
+- Added unit tests verifying:
+  - Exact eigenvector weight normalization and CR computation.
+  - Exception raised loudly when evaluating an inconsistent matrix.
+  - Zero label usage: `ahp_score` executes cleanly when `label` column is removed.
+- Status: SYNTHETIC - pipeline test, not a real finding.
+
 ---
 
 ## Stage 2 — Study Area & Data Collection ⬜

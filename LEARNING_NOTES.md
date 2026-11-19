@@ -114,6 +114,15 @@ Beginners often assume machine learning models should be given 100% of the raw d
 2. **Search Space Reduction:** Civil engineers follow strict statutory and physical guidelines (such as IMSD guidelines in India). By applying hard constraints upfront, we restrict the candidate pool to sites where a check dam is legally and physically possible.
 3. **Plausible Negatives:** By ensuring that negative samples (label=0) for ML training come *only* from sites that passed physical feasibility, we force the ML model to learn the genuine hydrological, geological, and terrain subtleties that make one plausible location better than another.
 
+### How does AHP (Analytic Hierarchy Process) work in plain language?
+
+When civil engineers or planners evaluate multiple factors (slope, soil, rainfall, distance to road), they need a way to combine them.
+Instead of guessing weights directly out of thin air (e.g. "I think slope is 0.23 and rainfall is 0.14"), AHP breaks the decision down into **pairwise comparisons**:
+1. You compare just **two factors at a time**: e.g., "Is slope more important than rainfall?" An engineer might say: "Yes, slope is twice as important as rainfall for check dam stability."
+2. You place all these 1-on-1 judgements into an $n \times n$ grid (the pairwise matrix).
+3. **The Principal Eigenvector:** A mathematical theorem (the Perron-Frobenius theorem) proves that the unique vector representing the true underlying ranking of all factors simultaneously is the principal eigenvector of this matrix.
+4. **Consistency Ratio (CR):** Humans can make logically contradictory judgements (e.g. saying A > B, B > C, but C > A). The Consistency Ratio measures how much contradiction exists in your judgements compared to purely random guesses. Saaty established that if $CR < 0.10$ (less than 10% inconsistency), the judgements are mathematically consistent and trustworthy.
+
 ---
 
 ## Stage 2 — Study Area & Data

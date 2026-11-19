@@ -19,6 +19,7 @@ from pathlib import Path
 
 from src.generate_synthetic import generate_synthetic_dataset_v2, load_config
 from src.constraints import apply_hard_constraints
+from src.ahp import AHPScorer, compute_eigenvector_weights
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -113,4 +114,45 @@ def test_constraint_rules_on_hand_made_rows():
     assert len(passed_df) == 1
     assert passed_df.iloc[0]["site_id"] == 101
     assert len(funnel_df) == 8
+
+
+def test_ahp_consistency_ratio_and_failure():
+    """Verify AHP computes CR correctly, passes consistent matrices, and fails loudly when CR >= 0.1."""
+    # Load default valid matrix from config
+    scorer = AHPScorer()
+    assert scorer.cr < 0.10, f"Expected CR < 0.10, got {scorer.cr}"
+    assert np.isclose(np.sum(scorer.weights), 1.0)
+    assert len(scorer.weights) == len(scorer.criteria)
+
+    # Hand-craft an inconsistent 3x3 matrix (A > B, B > C, C > A)
+    # A > B by 5, B > C by 5, C > A by 5
+    inconsistent_matrix = np.array([
+        [1.0, 5.0, 1.0 / 5.0],
+        [1.0 / 5.0, 1.0, 5.0],
+        [5.0, 1.0 / 5.0, 1.0],
+    ])
+    with pytest.raises(ValueError, match="exceeds threshold"):
+        compute_eigenvector_weights(inconsistent_matrix, max_cr=0.10)
+
+
+def test_ahp_no_label_usage():
+    """Verify that AHP suitability score is computed completely without the label column."""
+    candidates_path = PROJECT_ROOT / "data" / "tables" / "candidates_v2.csv"
+    if candidates_path.exists():
+        df = pd.read_csv(candidates_path)
+    else:
+        raw = generate_synthetic_dataset_v2(n_samples=200, random_seed=42)
+        df, _ = apply_hard_constraints(raw)
+
+    # Completely remove the label column
+    df_no_label = df.drop(columns=["label"], errors="ignore")
+    assert "label" not in df_no_label.columns
+
+    scorer = AHPScorer()
+    scores = scorer.score(df_no_label)
+
+    assert isinstance(scores, np.ndarray)
+    assert len(scores) == len(df_no_label)
+    assert np.all((scores >= 0.0) & (scores <= 100.0))
+
 

@@ -155,6 +155,29 @@ To address this circularity in Stage 1b:
 **Output Files:** `data/tables/candidates_v2.csv` and `outputs/stage1b_constraint_funnel.csv`.
 **Status:** SYNTHETIC - pipeline test, not a real finding.
 
+### D-11: AHP Pairwise Comparison Matrix and Principal Eigenvector Scoring
+
+**Options considered:**
+- A) Ad-hoc arbitrary weight assignment (e.g. 0.20 slope, 0.20 flow, 0.15 TWI...) without formal consistency checks.
+- B) Formal Saaty Analytic Hierarchy Process (AHP) using pairwise comparison matrix, principal eigenvector extraction, and Consistency Ratio (CR) verification.
+
+**Choice:** B
+
+**Reason:**
+AHP provides a defensible multi-criteria framework rooted in matrix algebra rather than arbitrary guessing.
+1. **Pairwise Judgements Rationale (ASSUMPTION - verify against Karnataka watershed master plans):**
+   - *Slope and Flow Accumulation (Equal Priority, ~23.5% each):* Slope controls hydraulic scouring and ponding geometry; flow accumulation dictates volume of available runoff. They are given equal top weight and judged 2x more important than TWI/rainfall, 3x more than soil/geology, and 5x more than road distance.
+   - *TWI and Rainfall (~14.0% each):* Moisture convergence and precipitation supply.
+   - *Soil Texture and Lithology (~8.2% each):* Low-permeability soils and bedrock foundations minimize reservoir seepage and prevent dam breach.
+   - *Cropland Fraction Upstream (~5.1%):* Demand indicator for irrigation.
+   - *Distance to Road (~3.4%):* Economic/accessibility factor. Secondary to physical viability.
+2. **Matrix Consistency Check:**
+   Principal eigenvalue $\lambda_{\max} = 8.0961$, Consistency Index $CI = 0.0137$, Saaty Random Index $RI(8) = 1.41$, yielding Consistency Ratio $CR = 0.0097 < 0.10$. The code includes an assertion that aborts execution if $CR \ge 0.10$.
+3. **Strict A Priori Independence:**
+   AHP weights and fit scoring functions are fixed beforehand and NEVER fitted, tuned, or calibrated using training labels.
+
+**Status:** SYNTHETIC - pipeline test, not a real finding.
+
 ---
 
 ## Stage 2 Decisions
