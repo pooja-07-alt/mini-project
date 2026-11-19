@@ -107,6 +107,13 @@ In the real world, a satellite cannot see everything. For example, satellite dat
 
 In our synthetic v2 generator, we explicitly added a latent `unobserved_factor` that influences whether a check dam exists or succeeds. Because the model cannot see this column, the highest AUC a good model can reach is bounded around 0.75–0.90. This teaches us how to evaluate models under realistic uncertainty.
 
+### Why use hard constraints before machine learning?
+
+Beginners often assume machine learning models should be given 100% of the raw data and allowed to figure out everything on their own. In geospatial engineering, this is a dangerous pitfall:
+1. **Trivial Negatives:** If you feed the model stream pixels inside existing towns, inside lakes, or on 50° vertical cliffs, the model will achieve 99% accuracy simply by learning "don't build in a lake" or "don't build in a house". This creates an illusion of high predictive power while failing to distinguish good stream sites from mediocre stream sites.
+2. **Search Space Reduction:** Civil engineers follow strict statutory and physical guidelines (such as IMSD guidelines in India). By applying hard constraints upfront, we restrict the candidate pool to sites where a check dam is legally and physically possible.
+3. **Plausible Negatives:** By ensuring that negative samples (label=0) for ML training come *only* from sites that passed physical feasibility, we force the ML model to learn the genuine hydrological, geological, and terrain subtleties that make one plausible location better than another.
+
 ---
 
 ## Stage 2 — Study Area & Data

@@ -132,6 +132,29 @@ To address this circularity in Stage 1b:
 
 **Status:** SYNTHETIC - pipeline test, not a real finding. ASSUMPTION - verify latent factors against local field data in Stage 5.
 
+### D-10: Hard Constraints Filtering Before ML and Scoring
+
+**Options considered:**
+- A) Let the ML model and AHP score every raw stream pixel directly, including settlements, steep ravines, and water bodies.
+- B) Apply hard engineering and environmental constraints upfront to filter unfeasible sites; sample negatives for ML strictly from the passed sites.
+
+**Choice:** B
+
+**Reason:**
+1. ML models are designed to learn complex, non-linear relationships, but having them waste model capacity learning that "you cannot build a check dam in the middle of a reservoir or through an existing village" degrades performance on subtle siting distinctions.
+2. If negatives are sampled from unfeasible locations (like steep 45° mountain slopes or wide rivers), an ML model gets artificially high accuracy by learning trivial exclusions rather than true siting suitability. Restricting candidate sites and negative samples to physically plausible stream reaches creates a realistic decision boundary.
+3. Every threshold is externalized to `config.yaml` and marked `ASSUMPTION - verify against IMSD / Karnataka Minor Irrigation guidelines`:
+   - `stream_order`: [1, 3] (check dams are built on lower order streams)
+   - `slope_deg`: [1.0, 15.0] (avoids standing ponds or high scour risk)
+   - `catchment_area_km2`: >= 1.0 km² (ensures sufficient runoff yield)
+   - `valley_width_m`: <= 120.0 m (limits masonry span length and cost)
+   - `lulc_class`: exclude `built_up`, `water`, and `forest`
+   - `protected_area_flag`: exclude protected areas (statutory conservation law)
+   - `dist_to_settlement_m`: >= 150.0 m (safety buffer against backwater inundation)
+
+**Output Files:** `data/tables/candidates_v2.csv` and `outputs/stage1b_constraint_funnel.csv`.
+**Status:** SYNTHETIC - pipeline test, not a real finding.
+
 ---
 
 ## Stage 2 Decisions

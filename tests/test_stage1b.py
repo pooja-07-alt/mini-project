@@ -18,6 +18,7 @@ import pytest
 from pathlib import Path
 
 from src.generate_synthetic import generate_synthetic_dataset_v2, load_config
+from src.constraints import apply_hard_constraints
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -55,3 +56,61 @@ def test_synthetic_v2_schema_and_blocks():
     assert df["block_id"].nunique() >= 8
     assert set(df["label"].unique()).issubset({0, 1})
     assert 0.15 <= df["label"].mean() <= 0.45
+
+
+def test_constraint_rules_on_hand_made_rows():
+    """Verify that each hard constraint rule correctly filters out violating hand-made rows."""
+    base_valid_row = {
+        "site_id": 1,
+        "block_id": 1,
+        "lat": 15.2,
+        "lon": 75.2,
+        "elevation_m": 550.0,
+        "slope_deg": 5.0,  # valid (1 - 15)
+        "stream_order": 2,  # valid (1 - 3)
+        "flow_accum": 3000,
+        "catchment_area_km2": 2.5,  # valid (>= 1.0)
+        "twi": 8.0,
+        "valley_width_m": 60.0,  # valid (<= 120.0)
+        "stream_width_m": 8.0,
+        "rainfall_mm": 800.0,
+        "lulc_class": "cropland",  # valid (not in built_up, water, forest)
+        "cropland_fraction_upstream": 0.6,
+        "soil_texture": "clay",
+        "lithology": "gneiss",
+        "dist_to_road_m": 500.0,
+        "dist_to_settlement_m": 400.0,  # valid (>= 150.0)
+        "protected_area_flag": 0,  # valid (0)
+        "label": 1,
+    }
+
+    # Create test variations
+    rows = []
+    # 0: Valid row -> should pass
+    rows.append(dict(base_valid_row, site_id=101))
+    # 1: Stream order 4 -> fail
+    rows.append(dict(base_valid_row, site_id=102, stream_order=4))
+    # 2: Slope 25.0 -> fail
+    rows.append(dict(base_valid_row, site_id=103, slope_deg=25.0))
+    # 3: Catchment area 0.2 -> fail
+    rows.append(dict(base_valid_row, site_id=104, catchment_area_km2=0.2))
+    # 4: Valley width 200.0 -> fail
+    rows.append(dict(base_valid_row, site_id=105, valley_width_m=200.0))
+    # 5: LULC built_up -> fail
+    rows.append(dict(base_valid_row, site_id=106, lulc_class="built_up"))
+    # 6: LULC water -> fail
+    rows.append(dict(base_valid_row, site_id=107, lulc_class="water"))
+    # 7: LULC forest -> fail
+    rows.append(dict(base_valid_row, site_id=108, lulc_class="forest"))
+    # 8: Protected area flag 1 -> fail
+    rows.append(dict(base_valid_row, site_id=109, protected_area_flag=1))
+    # 9: Settlement distance 50m -> fail
+    rows.append(dict(base_valid_row, site_id=110, dist_to_settlement_m=50.0))
+
+    df_test = pd.DataFrame(rows)
+    passed_df, funnel_df = apply_hard_constraints(df_test)
+
+    assert len(passed_df) == 1
+    assert passed_df.iloc[0]["site_id"] == 101
+    assert len(funnel_df) == 8
+

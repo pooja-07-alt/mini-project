@@ -91,6 +91,18 @@
   - Preserved original v1 file `data/tables/synthetic_checkdam_features.csv` intact; generated new table `data/tables/synthetic_checkdam_candidates_v2.csv`.
 - Status: SYNTHETIC - pipeline test, not a real finding.
 
+### Step 1: Hard Constraints & Candidate Filtering ✅
+- Implemented `apply_hard_constraints()` in `src/constraints.py`.
+- Formulated 7 strict engineering/environmental rules with thresholds configured in `config.yaml` (marked ASSUMPTION - verify).
+- Evaluated against 3,000 synthetic v2 raw sites:
+  - 563 sites passed all constraints (18.8% survival rate).
+  - Preserved 206 positive labels (36.6% positive class balance among passed candidates).
+  - 658 positives removed from unfeasible terrain (primarily sub-1.0 km² catchments and steep slopes).
+- Generated output candidate table: `data/tables/candidates_v2.csv`.
+- Generated audit table: `outputs/stage1b_constraint_funnel.csv`.
+- Added unit tests for hand-made rows verifying each rule independently.
+- Status: SYNTHETIC - pipeline test, not a real finding.
+
 ---
 
 ## Stage 2 — Study Area & Data Collection ⬜
