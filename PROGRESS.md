@@ -76,6 +76,23 @@
 
 ---
 
+## Stage 1b — Pipeline Refactor (AHP + ML Hybrid) 🟡 In Progress
+
+**Branch:** `stage-1b-pipeline-refactor`
+**Focus:** Synthetic v2 generation, hard constraints funnel, eigenvector AHP, spatial CV ML models, agreement mapping, and multi-objective optimization ranking.
+
+### Step 0: Audit & Synthetic Data v2 ✅
+- Audited Stage 1 v1 synthetic generator: confirmed that class-conditional feature separation and direct alignment with AHP criteria caused circularity and artificially inflated AUC (>0.99).
+- Documented findings in `DECISIONS.md` (D-09) and concepts in `LEARNING_NOTES.md`.
+- Implemented `generate_synthetic_dataset_v2()` in `src/generate_synthetic.py`:
+  - 3,000 candidate stream sites across 8 contiguous geographic spatial blocks.
+  - 21 columns including coordinates, terrain, hydrology, soil, geology, land use, and infrastructure distances.
+  - Latent data-generating process incorporating an unobserved geotechnical/subsurface factor ($u \sim \mathcal{N}(0, 1)$) and logistic noise to cap achievable model AUC at ~0.75–0.90.
+  - Preserved original v1 file `data/tables/synthetic_checkdam_features.csv` intact; generated new table `data/tables/synthetic_checkdam_candidates_v2.csv`.
+- Status: SYNTHETIC - pipeline test, not a real finding.
+
+---
+
 ## Stage 2 — Study Area & Data Collection ⬜
 
 **Date completed:** —

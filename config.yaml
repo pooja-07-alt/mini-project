@@ -1,0 +1,175 @@
+# ==============================================================================
+# CONFIGURATION FILE — Check Dam Site Selection Pipeline (Stage 1b Refactor)
+# ==============================================================================
+# Note: Every threshold, weight, and parameter is defined here to avoid magic numbers.
+# Anything not yet field-verified is explicitly marked ASSUMPTION - verify.
+# SYNTHETIC - pipeline test, not a real finding.
+# ==============================================================================
+
+pipeline:
+  name: "checkdam_site_selection_stage1b"
+  environment: "synthetic_testing"
+  random_seed: 42
+  synthetic_label: "SYNTHETIC - pipeline test, not a real finding"
+
+paths:
+  synthetic_v1_csv: "data/tables/synthetic_checkdam_features.csv"
+  synthetic_v2_csv: "data/tables/synthetic_checkdam_candidates_v2.csv"
+  candidates_filtered_csv: "data/tables/candidates_v2.csv"
+  constraint_funnel_csv: "outputs/stage1b_constraint_funnel.csv"
+  comparison_table_csv: "outputs/stage1b_comparison_table.csv"
+  comparison_table_md: "outputs/stage1b_comparison_table.md"
+  per_fold_table_csv: "outputs/stage1b_per_fold_metrics.csv"
+  roc_pr_plot_png: "outputs/stage1b_roc_pr_curves.png"
+  field_verification_csv: "outputs/field_verification.csv"
+  agreement_geojson: "outputs/stage1b_agreement_map.geojson"
+  docs_geojson: "docs/data/recommended_sites.geojson"
+  optimization_top15_csv: "outputs/stage1b_pareto_and_top_sites.csv"
+  rank_sensitivity_csv: "outputs/stage1b_rank_sensitivity.csv"
+  tradeoff_plot_png: "outputs/stage1b_optimization_tradeoffs.png"
+
+synthetic_v2:
+  n_samples: 3000
+  n_spatial_blocks: 8
+  random_seed: 42
+  positive_fraction: 0.22 # ASSUMPTION - verify against historical construction base rate
+  lat_range: [15.10, 15.65] # Representative sub-watershed box in Karnataka
+  lon_range: [75.05, 75.60]
+  # Latent process weights for realistic label generation:
+  latent_weights:
+    slope: 0.25
+    flow: 0.20
+    rainfall: 0.15
+    geology: 0.15
+    road: 0.10
+    unobserved: 0.35 # Unobserved factor ensures max achievable AUC is ~0.75-0.90
+  logistic_noise_scale: 0.65
+
+# ── Step 1: Hard Constraints ──────────────────────────────────────────────────
+# Rules to prune unviable sites before AHP and ML scoring.
+# Negative training samples for ML must only come from passed sites.
+constraints:
+  stream_order_min: 1           # ASSUMPTION - verify against IMSD / Karnataka check dam siting guidelines
+  stream_order_max: 3           # ASSUMPTION - verify: check dams usually built on 1st to 3rd order streams
+  slope_deg_min: 1.0            # ASSUMPTION - verify: avoids flat stagnant basins
+  slope_deg_max: 15.0           # ASSUMPTION - verify: steep gorges risk wall collapse and high scouring
+  min_catchment_area_km2: 1.0   # ASSUMPTION - verify: ensures sufficient drainage yield
+  max_valley_width_m: 120.0     # ASSUMPTION - verify: wider valleys require uneconomical masonry/bund lengths
+  excluded_lulc_classes:        # ASSUMPTION - verify: cannot construct on water bodies, forests, or settlements
+    - "built_up"
+    - "water"
+    - "forest"
+  min_dist_to_settlement_m: 150.0 # ASSUMPTION - verify: avoids safety hazards and direct village flooding
+  exclude_protected_areas: true # ASSUMPTION - verify: legal and environmental protection exclusion
+
+# ── Step 2: AHP (Analytic Hierarchy Process) ──────────────────────────────────
+# Multi-criteria decision weights derived from pairwise comparison matrix.
+# Fixed beforehand; NEVER tuned with labels. Consistency Ratio (CR) must be < 0.10.
+ahp:
+  max_cr: 0.10
+  score_multiplier: 100.0 # Scales ahp_score to 0-100 range
+  criteria:
+    - "slope_deg"
+    - "flow_accum"
+    - "twi"
+    - "rainfall_mm"
+    - "soil_texture"
+    - "lithology"
+    - "cropland_fraction_upstream"
+    - "dist_to_road_m"
+  # Pairwise comparison matrix entries (upper triangle or full matrix)
+  # Rows and columns order: [slope, flow_accum, twi, rainfall, soil, lithology, crop_upstream, dist_road]
+  pairwise_matrix:
+    - [1.000, 1.000, 2.000, 2.000, 3.000, 3.000, 4.000, 5.000]
+    - [1.000, 1.000, 2.000, 2.000, 3.000, 3.000, 4.000, 5.000]
+    - [0.500, 0.500, 1.000, 1.000, 2.000, 2.000, 3.000, 4.000]
+    - [0.500, 0.500, 1.000, 1.000, 2.000, 2.000, 3.000, 4.000]
+    - [0.333, 0.333, 0.500, 0.500, 1.000, 1.000, 2.000, 3.000]
+    - [0.333, 0.333, 0.500, 0.500, 1.000, 1.000, 2.000, 3.000]
+    - [0.250, 0.250, 0.333, 0.333, 0.500, 0.500, 1.000, 2.000]
+    - [0.200, 0.200, 0.250, 0.250, 0.333, 0.333, 0.500, 1.000]
+  # Fit scoring parameters for converting physical attributes to [0, 1] fit score:
+  fit_functions:
+    slope_optimal_range: [3.0, 8.0] # Peak suitability between 3 and 8 degrees
+    slope_max_acceptable: 15.0
+    soil_scores:
+      clay: 1.00
+      loamy: 0.85
+      sandy: 0.30
+      gravelly: 0.20
+    lithology_scores:
+      gneiss: 0.90
+      granite: 0.85
+      basalt: 0.70
+      sandstone: 0.40
+      alluvium: 0.30
+
+# ── Step 3 & 4: Machine Learning ──────────────────────────────────────────────
+ml:
+  block_column: "block_id"
+  label_column: "label"
+  base_features:
+    - "elevation_m"
+    - "slope_deg"
+    - "stream_order"
+    - "flow_accum"
+    - "catchment_area_km2"
+    - "twi"
+    - "valley_width_m"
+    - "stream_width_m"
+    - "rainfall_mm"
+    - "cropland_fraction_upstream"
+    - "dist_to_road_m"
+    - "dist_to_settlement_m"
+  categorical_features:
+    - "lulc_class"
+    - "soil_texture"
+    - "lithology"
+  random_forest:
+    n_estimators: 250
+    max_depth: 8
+    min_samples_leaf: 6
+    class_weight: "balanced"
+    random_state: 42
+    n_jobs: -1
+  xgboost:
+    n_estimators: 250
+    max_depth: 4
+    learning_rate: 0.04
+    subsample: 0.8
+    colsample_bytree: 0.8
+    scale_pos_weight: 3.5
+    random_state: 42
+    eval_metric: "logloss"
+
+# ── Step 6: Agreement Map ─────────────────────────────────────────────────────
+agreement:
+  top_percentile: 0.30 # Top 30% by score defines "high" category
+  classes:
+    both_high: "both_high"
+    ml_only_high: "ml_only_high"
+    ahp_only_high: "ahp_only_high"
+    both_low: "both_low"
+
+# ── Step 7: Multi-Objective Optimization ──────────────────────────────────────
+optimization:
+  dam_height_m: 3.0 # ASSUMPTION - verify standard minor irrigation masonry check dam height
+  top_n_export: 15
+  # Geometric approximations for objectives:
+  # storage_m3 = 0.5 * valley_width_m * (dam_height_m^2 / tan(slope_rad)) * storage_efficiency_factor
+  storage_efficiency_factor: 0.60 # ASSUMPTION - verify
+  # cost_proxy = (valley_width_m * dam_height_m) * (1 + 0.05 * slope_deg) * (1 + 0.0005 * dist_to_road_m)
+  # submerged_ha = (0.5 * valley_width_m * (dam_height_m / tan(slope_rad)) * cropland_fraction_upstream) / 10000
+  weight_presets:
+    balanced:
+      storage: 0.40
+      cost_proxy: 0.35 # minimization
+      submerged_ha: 0.25 # minimization
+    storage_priority:
+      storage: 0.70
+      cost_proxy: 0.20
+      submerged_ha: 0.10
+    low_impact:
+      storage: 0.20
+      cost_proxy: 0.30
+      submerged_ha: 0.50

@@ -106,9 +106,31 @@
 
 ---
 
-## Stage 1 Decisions
+## Stage 1b Decisions (Pipeline Refactor)
 
-*(fill in after completing Stage 1)*
+---
+
+### D-09: Audit of Stage 1 v1 Synthetic Labels and Redesign for v2
+
+**Audit of v1 Synthetic Label Generation:**
+In Stage 1 (`src/generate_synthetic.py` v1), labels were generated through class-conditional sampling:
+1. Two separate dictionaries (`pos` for label=1 and `neg` for label=0) drew features from completely separated distributions.
+2. For label=1, features were sampled directly around ideal civil engineering/AHP criteria (e.g., slope ~ 8° ± 3°, stream order strictly {1,2,3}, soil texture strictly loamy or clay, low distance to road).
+3. For label=0, features were sampled from broader/poorer distributions (e.g., slope ~ 15° ± 7°, stream orders 1–5, soil texture including sandy).
+4. **Circularity & Inflation Assessment:**
+   Because positive and negative samples were separated *a priori* by manually partitioned parameter boundaries without overlap, realistic noise, or unobserved confounding, ML models achieved near-perfect scores (AUC > 0.992). Furthermore, because the positive sampling aligned directly with AHP preferred criteria, comparing AHP against ML on this data was fundamentally circular—both models were evaluated against an artificial ground truth hand-crafted to reward their specific assumptions.
+
+**v2 Data Generating Process:**
+To address this circularity in Stage 1b:
+1. **Candidate-first sampling:** ~3,000 stream candidates are generated across realistic Karnataka sub-watershed terrain and climate distributions before assigning labels.
+2. **Contiguous Spatial Blocks:** 8 distinct spatial blocks (`block_id` 1 to 8) are constructed via 2D latitude-longitude geographic grid partitioning (2 latitude × 4 longitude blocks) to ensure rigorous spatial cross-validation.
+3. **Latent Process with Unobserved Factors:**
+   Labels are assigned via a latent utility function:
+   $$z = \sum w_i f_i(\text{observed}) + w_{\text{unobs}} \cdot u + \text{penalties} + \epsilon_{\text{logistic}}$$
+   where $u \sim \mathcal{N}(0, 1)$ is an **unobserved factor** (representing unmapped subsurface foundation bedrock depth, localized aquifer fracture porosity, or community administrative approval) and $\epsilon \sim \text{Logistic}(0, 0.65)$ is stochastic disturbance.
+4. **Target AUC (0.75 – 0.90):** Because the unobserved factor accounts for substantial variance (~35%) and is omitted from the tabular features provided to models, no model can achieve trivial or circular separation.
+
+**Status:** SYNTHETIC - pipeline test, not a real finding. ASSUMPTION - verify latent factors against local field data in Stage 5.
 
 ---
 

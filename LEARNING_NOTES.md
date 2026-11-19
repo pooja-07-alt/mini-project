@@ -87,6 +87,28 @@ A good test: could you explain this concept to a civil engineer who builds check
 
 ---
 
+## Stage 1b — Pipeline Refactor & Methodological Learning
+
+### What is circular validation (and why was v1 synthetic data circular)?
+
+In machine learning, **circular validation** happens when the rule or assumptions used to create the data's labels are the exact same assumptions being tested or scored.
+In our Stage 1 v1 synthetic generator:
+- Sites with label = 1 were manually assigned slopes of 5–12°, clay/loam soils, and low distances to roads.
+- Sites with label = 0 were assigned steeper slopes and poor soils.
+When our AHP baseline and Random Forest were tested on this data, they achieved 0.92–0.99 AUC. But this didn't prove the models understood real Karnataka hydrology—it only proved they could rediscover the two statistical distributions we hand-coded!
+In real world projects, labels come from nature or historical human construction, which always contain noise, historical preferences, and unobserved variables.
+
+### What is an unobserved factor (confounder)?
+
+In the real world, a satellite cannot see everything. For example, satellite data gives us surface slope, land cover, and estimated rainfall. But it cannot see:
+1. How deep solid bedrock is beneath the stream bed (essential for a dam's structural foundation).
+2. Local subsurface rock fracture permeability (will the stored water seep underground too fast?).
+3. Whether local farmers and gram panchayats consented to build the structure.
+
+In our synthetic v2 generator, we explicitly added a latent `unobserved_factor` that influences whether a check dam exists or succeeds. Because the model cannot see this column, the highest AUC a good model can reach is bounded around 0.75–0.90. This teaches us how to evaluate models under realistic uncertainty.
+
+---
+
 ## Stage 2 — Study Area & Data
 
 *(fill in after Stage 2)*
