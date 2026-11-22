@@ -145,6 +145,34 @@ In pure machine learning, the algorithm tries to discover patterns solely from r
 - **Method A** is a simple hybrid: we calculate the rule-based `ahp_score` upfront (using zero labels) and give it to Random Forest and XGBoost as an **extra feature column**.
 - **Why do this?** In small or noisy datasets, the trees might struggle to find the exact interaction between slope, rainfall, and soil. By giving them the pre-computed expert score, the model gets a head start ("inductive bias"). The tree can either trust the AHP score, refine it, or override it when the data disagrees.
 
+### Why do we need PR-AUC (Precision-Recall AUC) alongside AUC-ROC?
+
+- **AUC-ROC (Area Under the Receiver Operating Characteristic curve):** Plots True Positive Rate (Sensitivity) vs False Positive Rate (1 - Specificity). It tells you how well the model separates positives from negatives across all possible thresholds. However, if there are lots of negatives, the False Positive Rate stays tiny even if hundreds of false alarms occur, making the ROC curve look overly optimistic.
+- **PR-AUC (Precision-Recall Area Under the Curve):** Plots Precision (out of all sites we flagged as suitable, what fraction was actually suitable?) against Recall (what fraction of all suitable sites did we find?).
+- **Why it matters for water conservation:** Civil engineering departments have limited budgets; if an algorithm flags 50 sites and 40 of them are duds (poor precision), time and money are wasted on field inspections. PR-AUC directly reveals whether the top-ranked sites are trustworthy.
+
+### What is the Unified "Top-p%" Threshold Rule?
+
+When comparing different methods, how do you decide whether a site is "suitable" (1) or "unsuitable" (0)?
+- An AHP model produces scores between 40 and 80.
+- A Random Forest produces probabilities between 0.10 and 0.90.
+- If you use a single fixed cutoff like 0.50, AHP would flag 100% of sites as suitable, which is absurd!
+- The **Top-p% Rule** provides a completely fair benchmark:
+  1. Calculate the percentage $p$ of successful check dams in the training region (e.g., 58%).
+  2. For the unseen test region, rank all candidate sites from highest score to lowest score.
+  3. Flag the top $p\%$ of sites as "recommended".
+  4. Compare how many actual suitable sites each method captured in its top $p\%$.
+This tests pure ranking capability without favoring any model's specific score range.
+
+### What is a Paired Cross-Validation Comparison?
+
+Instead of merely comparing global averages across all 8 folds (e.g. RF mean AUC 0.754 vs ML-only 0.736), a **paired comparison** looks at the difference *within each individual fold*:
+- Fold 1: did adding AHP improve Fold 1? (+0.02)
+- Fold 2: did adding AHP improve Fold 2? (+0.04)
+- ...
+- We count how many folds out of 8 showed an improvement (e.g., 6 out of 8 folds improved for RF).
+- **Comparison to Fold-to-Fold Standard Deviation:** If the average improvement is +0.018, but the standard deviation from block to block is ±0.061, the improvement is smaller than the natural swing caused by geographical terrain differences. This teaches us that terrain variability across valleys is a much stronger factor than whether AHP is fed into the tree.
+
 ---
 
 ## Stage 2 — Study Area & Data

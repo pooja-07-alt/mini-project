@@ -259,6 +259,57 @@ def test_step4_ml_ahp_artifacts():
     assert len(df_cv) == 16  # 8 folds * 2 models
 
 
+def test_step5_comparison_artifacts():
+    """Verify that Step 5 comparison table, per-fold metrics, plots, and notes exist and are valid."""
+    comp_csv = PROJECT_ROOT / "outputs" / "stage1b_comparison_table.csv"
+    assert comp_csv.exists(), "stage1b_comparison_table.csv missing"
+    df_comp = pd.read_csv(comp_csv)
+    assert len(df_comp) == 5
+    expected_methods = {"AHP-only", "RF ML-only", "XGB ML-only", "RF + ahp_score", "XGB + ahp_score"}
+    assert set(df_comp["Method"]) == expected_methods
+
+    # Check required columns
+    for col in [
+        "Method",
+        "AUC-ROC (mean ± std)",
+        "PR-AUC (mean ± std)",
+        "Precision (mean ± std)",
+        "Recall (mean ± std)",
+        "F1 (mean ± std)",
+        "Pooled AUC-ROC",
+        "Pooled PR-AUC",
+        "Pooled Precision",
+        "Pooled Recall",
+        "Pooled F1",
+    ]:
+        assert col in df_comp.columns, f"Missing {col} in comparison table"
+
+    # Check per-fold detailed table
+    per_fold_csv = PROJECT_ROOT / "outputs" / "stage1b_per_fold_metrics.csv"
+    assert per_fold_csv.exists(), "stage1b_per_fold_metrics.csv missing"
+    df_pf = pd.read_csv(per_fold_csv)
+    assert len(df_pf) == 40  # 5 methods * 8 folds
+    for col in ["method", "fold", "holdout_block", "n_train", "n_test", "train_pos_rate", "k_top_flagged", "auc_roc", "pr_auc", "f1"]:
+        assert col in df_pf.columns
+
+    # Verify top-p% threshold rule was applied
+    for _, row in df_pf.iterrows():
+        expected_k = max(1, int(round(row["train_pos_rate"] * row["n_test"])))
+        assert row["k_top_flagged"] == expected_k
+
+    # Check ROC/PR curve plot and notes
+    plot_path = PROJECT_ROOT / "outputs" / "stage1b_roc_pr_curves.png"
+    assert plot_path.exists(), "stage1b_roc_pr_curves.png missing"
+    assert plot_path.stat().st_size > 5000
+
+    notes_path = PROJECT_ROOT / "outputs" / "stage1b_comparison_notes.md"
+    assert notes_path.exists(), "stage1b_comparison_notes.md missing"
+    content = notes_path.read_text(encoding="utf-8")
+    assert "SYNTHETIC - pipeline test, not a real finding" in content
+    assert "Does Adding `ahp_score` Help?" in content
+
+
+
 
 
 

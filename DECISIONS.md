@@ -233,6 +233,29 @@ AHP provides a defensible multi-criteria framework rooted in matrix algebra rath
 
 ---
 
+### D-15: Unified Top-$p\%$ Threshold Rule and 5-Method Comparison Benchmark (Step 5)
+
+**Context:**
+Comparing AHP scores (continuous [0, 100], rule-based) against ML models (probabilities [0, 1]) requires a fair, uncheatable thresholding rule. Arbitrary fixed thresholds (e.g., 0.5 or 50) fail because the underlying distributions and calibrations differ fundamentally. Per-fold F1-tuning can also introduce noise or bias toward models with sharp local peaks.
+
+**Options Considered:**
+1. **Option 1 (Fixed 0.50 cutoff):** Impractical because AHP scores range from 41 to 78, while ML probabilities range from 0.05 to 0.95.
+2. **Option 2 (Independently F1-tuned threshold per fold):** Thresholds vary widely between 0.35 and 0.65 across folds, complicating fair comparison between AHP and ML.
+3. **Option 3 (Unified Top-$p\%$ Rule):** In each held-out spatial fold, classify the top $p\%$ of candidate sites as positive, where $p$ is the empirical positive rate of the training folds ($p = \text{mean}(y_{\text{train}})$).
+
+**Choice:** Option 3 (Unified Top-$p\%$ Rule).
+
+**Reason:**
+1. It simulates the real-world operational planning constraint: an agency has the resources to investigate or construct a fixed quota of high-scoring sites (roughly proportional to the regional prevalence).
+2. It completely eliminates threshold leakage and tests pure ranking effectiveness across all methods on equal footing.
+3. Paired evaluation demonstrates:
+   - RF ML-only $\to$ RF + AHP: Mean $\Delta$AUC is $+0.0175$, with improvement in 6 out of 8 folds.
+   - XGB ML-only $\to$ XGB + AHP: Mean $\Delta$AUC is $-0.0017$, with improvement in 2 out of 8 folds.
+   - In both cases, fold-to-fold spatial standard deviations (0.044–0.064) exceed the delta, proving that geographical variance between sub-watersheds is more influential than the inclusion of `ahp_score` as a feature.
+4. **Notice:** SYNTHETIC - pipeline test, not a real finding. Evaluated on 8 spatial blocks of synthetic v2 data.
+
+---
+
 ## Stage 2 Decisions
 
 *(fill in after completing Stage 2)*
