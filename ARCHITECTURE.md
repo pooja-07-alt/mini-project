@@ -124,7 +124,7 @@ src/dashboard_export.py ← exports GeoJSON for Leaflet
 2. **Modular:** each `src/` module has one responsibility; notebooks call them.
 3. **Reproducible:** all random seeds are fixed; all file paths are relative to project root.
 4. **Extensible:** `ml_model.py` accepts a `structure_type` parameter — future farm pond or percolation tank models slot in without rewriting the pipeline.
-5. **No invented data:** all values in the synthetic CSV are generated from documented distributions based on real Karnataka hydrology literature.
+5. **No invented data:** all values in the synthetic CSV are generated from parameterized statistical distributions (assumed expert-style judgement; literature support UNVERIFIED).
 
 ---
 

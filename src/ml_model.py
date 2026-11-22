@@ -289,7 +289,10 @@ def run_step3_ml_only(config: Optional[dict] = None) -> Tuple[pd.DataFrame, pd.D
     Execute Step 3: Train Random Forest and XGBoost ML-only models with Spatial CV.
 
     Saves:
+      - outputs/stage1b_block_class_counts.csv
+      - outputs/stage1b_cv_ml_only.csv
       - outputs/stage1b_oof_ml_only.csv
+      - outputs/stage1b_shap_summary.png
     """
     if config is None:
         config = load_config()
@@ -305,17 +308,50 @@ def run_step3_ml_only(config: Optional[dict] = None) -> Tuple[pd.DataFrame, pd.D
     print(f"Loading candidates: {candidates_path.relative_to(project_root)}")
     df = pd.read_csv(candidates_path)
 
-    # 1. Random Forest ML-Only
+    ml_cfg = config.get("ml", {})
+    block_col = ml_cfg.get("block_column", "block_id")
+    label_col = ml_cfg.get("label_column", "label")
+    base_feats = ml_cfg.get("base_features", [])
+    cat_feats = ml_cfg.get("categorical_features", [])
+
+    # ── 1. Save Per-Block Class Counts ────────────────────────────────────────
+    block_records = []
+    for b in sorted(df[block_col].unique()):
+        sub = df[df[block_col] == b]
+        pos = int(sub[label_col].sum())
+        tot = len(sub)
+        neg = tot - pos
+        rate = round(pos / tot, 4)
+        block_records.append({
+            "block_id": b,
+            "total_candidates": tot,
+            "positives": pos,
+            "negatives": neg,
+            "positive_rate": rate,
+        })
+    df_block_counts = pd.DataFrame(block_records)
+    block_counts_path = project_root / config["paths"]["block_class_counts_csv"]
+    block_counts_path.parent.mkdir(parents=True, exist_ok=True)
+    df_block_counts.to_csv(block_counts_path, index=False)
+    print(f"\n✅ Per-block class counts saved to: {block_counts_path.relative_to(project_root)}")
+    print(df_block_counts.to_string(index=False))
+
+    # ── 2. Run Spatial Cross-Validation ───────────────────────────────────────
     print("\nRunning Spatial CV: Random Forest (ML-Only)...")
     rf_folds, rf_oof = run_spatial_block_cv(df, "random_forest", config=config, include_ahp=False)
 
-    # 2. XGBoost ML-Only
     print("Running Spatial CV: XGBoost (ML-Only)...")
     xgb_folds, xgb_oof = run_spatial_block_cv(df, "xgboost", config=config, include_ahp=False)
 
     all_folds = pd.concat([rf_folds, xgb_folds], ignore_index=True)
 
-    # 3. Assemble Out-of-Fold Predictions Table
+    # Save per-fold CV metrics table
+    cv_out = project_root / config["paths"]["cv_ml_only_csv"]
+    cv_out.parent.mkdir(parents=True, exist_ok=True)
+    all_folds.to_csv(cv_out, index=False)
+    print(f"\n✅ Per-fold CV metrics saved to: {cv_out.relative_to(project_root)}")
+
+    # ── 3. Assemble Out-of-Fold Predictions Table ─────────────────────────────
     oof_df = pd.DataFrame({
         "site_id": df["site_id"],
         "block_id": df["block_id"],
@@ -331,14 +367,78 @@ def run_step3_ml_only(config: Optional[dict] = None) -> Tuple[pd.DataFrame, pd.D
     oof_out = project_root / config["paths"]["oof_ml_only_csv"]
     oof_out.parent.mkdir(parents=True, exist_ok=True)
     oof_df.to_csv(oof_out, index=False)
+    print(f"✅ Out-of-fold predictions saved to: {oof_out.relative_to(project_root)}")
 
-    print("\nOut-of-Fold Spatial CV Summary (Mean +/- Std):")
+    print("\nOut-of-Fold Spatial CV Summary (Mean +/- Std across 8 blocks):")
     summary = all_folds.groupby("model")[["auc_roc", "pr_auc", "precision", "recall", "f1"]].agg(
         ["mean", "std"]
     ).round(3)
     print(summary.to_string())
 
-    print(f"\n✅ Out-of-fold predictions saved to: {oof_out.relative_to(project_root)}")
+    # ── 4. Feature Importances (Trained on All Candidates) ─────────────────────
+    print("\nComputing Feature Importances...")
+    preprocessor, feature_cols = build_preprocessor(base_feats, cat_feats, include_ahp=False)
+    X_all_proc = preprocessor.fit_transform(df[feature_cols])
+    y_all = df[label_col].values
+
+    cat_encoder = preprocessor.named_transformers_["cat"]
+    encoded_cat_names = list(cat_encoder.get_feature_names_out(cat_feats))
+    all_feature_names = [f for f in base_feats] + encoded_cat_names
+
+    # Random Forest Importances
+    rf_full = build_classifier("random_forest", config)
+    rf_full.fit(X_all_proc, y_all)
+    df_rf_imp = pd.DataFrame({
+        "feature": all_feature_names,
+        "importance": rf_full.feature_importances_,
+    }).sort_values("importance", ascending=False).reset_index(drop=True)
+
+    # XGBoost Importances
+    scale_pos_weight = (len(y_all) - sum(y_all)) / sum(y_all) if sum(y_all) > 0 else 1.0
+    xgb_full = build_classifier("xgboost", config, scale_pos_weight=scale_pos_weight)
+    xgb_full.fit(X_all_proc, y_all)
+    df_xgb_imp = pd.DataFrame({
+        "feature": all_feature_names,
+        "importance": xgb_full.feature_importances_,
+    }).sort_values("importance", ascending=False).reset_index(drop=True)
+
+    print("\nTop 5 Features — Random Forest:")
+    print(df_rf_imp.head(5).to_string(index=False))
+
+    print("\nTop 5 Features — XGBoost:")
+    print(df_xgb_imp.head(5).to_string(index=False))
+
+    # ── 5. SHAP Summary Plot ──────────────────────────────────────────────────
+    if _SHAP_AVAILABLE:
+        print("\nGenerating SHAP Summary Plot...")
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        shap_out = project_root / config["paths"]["shap_summary_plot_png"]
+        shap_out.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            explainer = shap.TreeExplainer(rf_full)
+            sv = explainer.shap_values(X_all_proc)
+            # Binary classification handling in shap 0.54
+            if isinstance(sv, np.ndarray) and sv.ndim == 3:
+                vals = sv[:, :, 1]
+            elif isinstance(sv, list) and len(sv) == 2:
+                vals = sv[1]
+            else:
+                vals = sv
+
+            plt.figure(figsize=(10, 6))
+            shap.summary_plot(vals, X_all_proc, feature_names=all_feature_names, show=False)
+            plt.title("SHAP Summary Plot — Random Forest Suitability Model\n[SYNTHETIC - pipeline test, not a real finding]", fontsize=11)
+            plt.tight_layout()
+            plt.savefig(shap_out, dpi=150, bbox_inches="tight")
+            plt.close()
+            print(f"✅ SHAP summary plot saved to: {shap_out.relative_to(project_root)}")
+        except Exception as e:
+            print(f"⚠️ Could not generate SHAP plot: {e}")
+
     print("\n[SYNTHETIC - pipeline test, not a real finding]")
     return all_folds, oof_df
 

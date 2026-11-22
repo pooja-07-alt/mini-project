@@ -143,7 +143,7 @@ To address this circularity in Stage 1b:
 **Reason:**
 1. ML models are designed to learn complex, non-linear relationships, but having them waste model capacity learning that "you cannot build a check dam in the middle of a reservoir or through an existing village" degrades performance on subtle siting distinctions.
 2. If negatives are sampled from unfeasible locations (like steep 45° mountain slopes or wide rivers), an ML model gets artificially high accuracy by learning trivial exclusions rather than true siting suitability. Restricting candidate sites and negative samples to physically plausible stream reaches creates a realistic decision boundary.
-3. Every threshold is externalized to `config.yaml` and marked `ASSUMPTION - verify against IMSD / Karnataka Minor Irrigation guidelines`:
+3. Every threshold is externalized to `config.yaml` and marked `assumed expert-style judgement; literature support UNVERIFIED (IMSD / Karnataka guidelines to be checked)`:
    - `stream_order`: [1, 3] (check dams are built on lower order streams)
    - `slope_deg`: [1.0, 15.0] (avoids standing ponds or high scour risk)
    - `catchment_area_km2`: >= 1.0 km² (ensures sufficient runoff yield)
@@ -165,7 +165,7 @@ To address this circularity in Stage 1b:
 
 **Reason:**
 AHP provides a defensible multi-criteria framework rooted in matrix algebra rather than arbitrary guessing.
-1. **Pairwise Judgements Rationale (ASSUMPTION - verify against Karnataka watershed master plans):**
+1. **Pairwise Judgements Rationale (assumed expert-style judgement; literature support UNVERIFIED):**
    - *Slope and Flow Accumulation (Equal Priority, ~23.5% each):* Slope controls hydraulic scouring and ponding geometry; flow accumulation dictates volume of available runoff. They are given equal top weight and judged 2x more important than TWI/rainfall, 3x more than soil/geology, and 5x more than road distance.
    - *TWI and Rainfall (~14.0% each):* Moisture convergence and precipitation supply.
    - *Soil Texture and Lithology (~8.2% each):* Low-permeability soils and bedrock foundations minimize reservoir seepage and prevent dam breach.
@@ -191,8 +191,25 @@ AHP provides a defensible multi-criteria framework rooted in matrix algebra rath
 2. Under leave-one-block-out CV, each of the 8 geographic zones is held out entirely as an unseen test region. The training fold never sees any pixel from the test block, and categorical encoders are fitted strictly on the training fold.
 3. Class imbalance is handled via `class_weight="balanced"` in Random Forest and dynamically calculated `scale_pos_weight` ($n_{\text{neg}} / n_{\text{pos}}$ on the training fold) in XGBoost.
 4. Threshold selection: To avoid optimistic test evaluation, the probability classification threshold is selected on the training fold by maximizing the F1 score, then frozen and applied to the held-out test fold.
+   - **Important Methodological Note:** Existing F1-tuned-threshold metrics from Step 3 are *tuned on training predictions - NOT used for method comparison*. Full comparative benchmarking across models using standardized thresholding rules is reserved for Step 5.
+5. **Synthetic Calibration Note:** Synthetic generator coefficients in `src/generate_synthetic.py` were calibrated to reach a realistic target AUC range (~0.72–0.78), so absolute metric values on synthetic data are **design parameters, not empirical findings**.
 
 **Status:** SYNTHETIC - pipeline test, not a real finding.
+
+---
+
+### D-13: Potential Double-Counting of Distance to Road and Cropland Fraction
+
+**Issue Identified:**
+- `dist_to_road_m` is currently used as an input feature for suitability scoring (both AHP and ML models) AND it is used in the multi-objective optimization as the primary driver of `cost_proxy = (valley_width * height) * (1 + 0.0005 * dist_to_road_m)`.
+- Similarly, `cropland_fraction_upstream` is used in suitability scoring (higher upstream agriculture = higher irrigation demand = higher suitability) AND downstream agricultural land is penalized in multi-objective optimization as `submerged_cropland_ha`.
+- This constitutes a potential **double-counting** of features across the suitability and optimization stages.
+
+**Options Considered:**
+- **Option A (Keep both):** Retain them in suitability scoring because historical check dams were preferentially built where roads made construction feasible and near farmland. In optimization, they represent operational cost and environmental trade-offs.
+- **Option B (Drop from suitability):** Restrict suitability scoring strictly to biophysical/hydrological criteria (terrain slope, flow accumulation, geology, soil, rainfall, TWI) and reserve socio-economic / logistical factors (`dist_to_road_m`, `cropland_fraction_upstream`) entirely for the post-suitability Pareto optimization stage.
+
+**Choice:** Keep Option A for now to preserve pipeline continuity on synthetic tests, but record this design tension. Decision on whether to drop them will be finalized before running on real data in Stage 6/7.
 
 ---
 

@@ -125,6 +125,7 @@
   - One-hot encoded categorical variables (`lulc_class`, `soil_texture`, `lithology`) fitted exclusively on training folds.
   - Handled class imbalance using `class_weight="balanced"` (RF) and dynamically calculated `scale_pos_weight` (XGBoost).
   - Selected decision threshold on the training fold by maximizing F1 score, then applied to the held-out test block.
+  - Note: These F1-tuned-threshold metrics are *tuned on training predictions - NOT used for method comparison*. Full comparative benchmarking across models using standardized thresholding rules is reserved for Step 5.
 - Out-of-fold spatial CV performance (mean ± std across 8 blocks):
   - **Random Forest (ML-only):**
     - AUC-ROC: **0.736 ± 0.061**
@@ -139,9 +140,14 @@
     - Recall: **0.725 ± 0.114**
     - F1: **0.720 ± 0.075**
 - Exported out-of-fold predicted probabilities for every candidate site to `outputs/stage1b_oof_ml_only.csv`.
+- Exported per-block class counts to `outputs/stage1b_block_class_counts.csv`.
+- Exported per-fold CV metrics to `outputs/stage1b_cv_ml_only.csv`.
+- Generated SHAP summary plot at `outputs/stage1b_shap_summary.png`.
+- Documented unverified literature and guidelines in `docs/CITATIONS_TO_VERIFY.md` and recorded Decision D-13 (feature double-counting audit) in `DECISIONS.md`.
 - Added unit tests verifying:
   - Complete block and site disjointness between train and test sets in all folds.
   - Validity and bounds of out-of-fold probability predictions.
+  - Integrity of per-block counts, per-fold CV table, SHAP plot, and citations registry.
 - Status: SYNTHETIC - pipeline test, not a real finding.
 
 ---

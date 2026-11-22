@@ -111,7 +111,7 @@ In our synthetic v2 generator, we explicitly added a latent `unobserved_factor` 
 
 Beginners often assume machine learning models should be given 100% of the raw data and allowed to figure out everything on their own. In geospatial engineering, this is a dangerous pitfall:
 1. **Trivial Negatives:** If you feed the model stream pixels inside existing towns, inside lakes, or on 50° vertical cliffs, the model will achieve 99% accuracy simply by learning "don't build in a lake" or "don't build in a house". This creates an illusion of high predictive power while failing to distinguish good stream sites from mediocre stream sites.
-2. **Search Space Reduction:** Civil engineers follow strict statutory and physical guidelines (such as IMSD guidelines in India). By applying hard constraints upfront, we restrict the candidate pool to sites where a check dam is legally and physically possible.
+2. **Search Space Reduction:** Civil engineers follow strict statutory and physical guidelines (such as IMSD guidelines in India — note: specific numeric thresholds are assumed expert-style judgements with literature support UNVERIFIED until primary manuals are checked). By applying hard constraints upfront, we restrict the candidate pool to sites where a check dam is legally and physically possible.
 3. **Plausible Negatives:** By ensuring that negative samples (label=0) for ML training come *only* from sites that passed physical feasibility, we force the ML model to learn the genuine hydrological, geological, and terrain subtleties that make one plausible location better than another.
 
 ### How does AHP (Analytic Hierarchy Process) work in plain language?

@@ -217,5 +217,30 @@ def test_oof_ml_only_predictions():
     assert not df_oof["xgb_prob_ml_only"].isna().any()
 
 
+def test_step3_gap_fill_artifacts():
+    """Verify that block counts, cv metrics, and shap plot exist and have valid structure."""
+    block_counts_path = PROJECT_ROOT / "outputs" / "stage1b_block_class_counts.csv"
+    assert block_counts_path.exists(), "stage1b_block_class_counts.csv missing"
+    df_bc = pd.read_csv(block_counts_path)
+    assert len(df_bc) == 8
+    for col in ["block_id", "total_candidates", "positives", "negatives", "positive_rate"]:
+        assert col in df_bc.columns
+
+    cv_metrics_path = PROJECT_ROOT / "outputs" / "stage1b_cv_ml_only.csv"
+    assert cv_metrics_path.exists(), "stage1b_cv_ml_only.csv missing"
+    df_cv = pd.read_csv(cv_metrics_path)
+    assert len(df_cv) == 16  # 8 folds * 2 models
+    for col in ["model", "fold", "holdout_block", "auc_roc", "pr_auc", "best_threshold"]:
+        assert col in df_cv.columns
+
+    shap_path = PROJECT_ROOT / "outputs" / "stage1b_shap_summary.png"
+    assert shap_path.exists(), "stage1b_shap_summary.png missing"
+    assert shap_path.stat().st_size > 1000
+
+    citations_path = PROJECT_ROOT / "docs" / "CITATIONS_TO_VERIFY.md"
+    assert citations_path.exists(), "docs/CITATIONS_TO_VERIFY.md missing"
+
+
+
 
 

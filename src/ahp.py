@@ -22,7 +22,7 @@ Rather than guessing weights arbitrarily:
 6. The final ahp_score = (sum(w_i * fit_i)) * 100 (range 0 to 100).
 
 CRITICAL RULE:
-  AHP weights are determined strictly a priori from engineering domain literature.
+  AHP weights are determined strictly a priori (assumed expert-style judgement; literature support UNVERIFIED).
   Labels are NEVER used to fit or tune AHP weights or scoring functions.
 
 SYNTHETIC - pipeline test, not a real finding.
@@ -172,7 +172,7 @@ class AHPScorer:
         """
         Convert raw continuous/categorical features to [0, 1] fit scores.
 
-        Each function reflects verified hydrological / geotechnical principles:
+        Each function reflects assumed expert-style judgement; literature support UNVERIFIED:
           - slope: trapezoidal fit (optimal 3-8 deg, acceptable 1-15 deg)
           - flow accumulation: log-scaled monotonic increase
           - TWI: normalized linear increase (high wetness = good)

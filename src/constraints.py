@@ -15,7 +15,7 @@ locations that passed physical feasibility; otherwise, the ML model wastes capac
 distinguishing dry riverbeds from deep lakes.
 
 All thresholds are read from config.yaml and marked:
-  ASSUMPTION - verify against IMSD / Karnataka check dam siting guidelines.
+  assumed expert-style judgement; literature support UNVERIFIED (IMSD / Karnataka check dam siting guidelines to be checked).
 
 Outputs:
   - data/tables/candidates_v2.csv
@@ -69,7 +69,7 @@ def apply_hard_constraints(
     c_cfg = config.get("constraints", {})
 
     # Extract thresholds from config (no magic numbers in code)
-    # Every threshold below is ASSUMPTION - verify against Karnataka guidelines
+    # Every threshold below is assumed expert-style judgement; literature support UNVERIFIED (to be checked against Karnataka guidelines)
     so_min = c_cfg.get("stream_order_min", 1)  # ASSUMPTION - verify
     so_max = c_cfg.get("stream_order_max", 3)  # ASSUMPTION - verify
     slope_min = c_cfg.get("slope_deg_min", 1.0)  # ASSUMPTION - verify

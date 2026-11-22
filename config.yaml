@@ -18,24 +18,28 @@ paths:
   candidates_filtered_csv: "data/tables/candidates_v2.csv"
   candidates_ahp_csv: "data/tables/candidates_v2_ahp.csv"
   constraint_funnel_csv: "outputs/stage1b_constraint_funnel.csv"
+  block_class_counts_csv: "outputs/stage1b_block_class_counts.csv"
+  cv_ml_only_csv: "outputs/stage1b_cv_ml_only.csv"
   oof_ml_only_csv: "outputs/stage1b_oof_ml_only.csv"
   oof_with_ahp_csv: "outputs/stage1b_oof_with_ahp.csv"
   comparison_table_csv: "outputs/stage1b_comparison_table.csv"
   comparison_table_md: "outputs/stage1b_comparison_table.md"
   per_fold_table_csv: "outputs/stage1b_per_fold_metrics.csv"
   roc_pr_plot_png: "outputs/stage1b_roc_pr_curves.png"
+  shap_summary_plot_png: "outputs/stage1b_shap_summary.png"
   field_verification_csv: "outputs/field_verification.csv"
   agreement_geojson: "outputs/stage1b_agreement_map.geojson"
   docs_geojson: "docs/data/recommended_sites.geojson"
   optimization_top15_csv: "outputs/stage1b_pareto_and_top_sites.csv"
   rank_sensitivity_csv: "outputs/stage1b_rank_sensitivity.csv"
   tradeoff_plot_png: "outputs/stage1b_optimization_tradeoffs.png"
+  citations_to_verify_md: "docs/CITATIONS_TO_VERIFY.md"
 
 synthetic_v2:
   n_samples: 3000
   n_spatial_blocks: 8
   random_seed: 42
-  positive_fraction: 0.22 # ASSUMPTION - verify against historical construction base rate
+  positive_fraction: 0.22 # assumed expert-style judgement; literature support UNVERIFIED
   lat_range: [15.10, 15.65] # Representative sub-watershed box in Karnataka
   lon_range: [75.05, 75.60]
   # Latent process weights for realistic label generation:
@@ -52,22 +56,23 @@ synthetic_v2:
 # Rules to prune unviable sites before AHP and ML scoring.
 # Negative training samples for ML must only come from passed sites.
 constraints:
-  stream_order_min: 1           # ASSUMPTION - verify against IMSD / Karnataka check dam siting guidelines
-  stream_order_max: 3           # ASSUMPTION - verify: check dams usually built on 1st to 3rd order streams
-  slope_deg_min: 1.0            # ASSUMPTION - verify: avoids flat stagnant basins
-  slope_deg_max: 15.0           # ASSUMPTION - verify: steep gorges risk wall collapse and high scouring
-  min_catchment_area_km2: 1.0   # ASSUMPTION - verify: ensures sufficient drainage yield
-  max_valley_width_m: 120.0     # ASSUMPTION - verify: wider valleys require uneconomical masonry/bund lengths
-  excluded_lulc_classes:        # ASSUMPTION - verify: cannot construct on water bodies, forests, or settlements
+  stream_order_min: 1           # assumed expert-style judgement; literature support UNVERIFIED (IMSD / Karnataka guidelines to be checked)
+  stream_order_max: 3           # assumed expert-style judgement; literature support UNVERIFIED: check dams usually built on 1st to 3rd order streams
+  slope_deg_min: 1.0            # assumed expert-style judgement; literature support UNVERIFIED: avoids flat stagnant basins
+  slope_deg_max: 15.0           # assumed expert-style judgement; literature support UNVERIFIED: steep gorges risk wall collapse and high scouring
+  min_catchment_area_km2: 1.0   # assumed expert-style judgement; literature support UNVERIFIED: ensures sufficient drainage yield
+  max_valley_width_m: 120.0     # assumed expert-style judgement; literature support UNVERIFIED: wider valleys require uneconomical masonry/bund lengths
+  excluded_lulc_classes:        # assumed expert-style judgement; literature support UNVERIFIED: cannot construct on water bodies, forests, or settlements
     - "built_up"
     - "water"
     - "forest"
-  min_dist_to_settlement_m: 150.0 # ASSUMPTION - verify: avoids safety hazards and direct village flooding
-  exclude_protected_areas: true # ASSUMPTION - verify: legal and environmental protection exclusion
+  min_dist_to_settlement_m: 150.0 # assumed expert-style judgement; literature support UNVERIFIED: avoids safety hazards and direct village flooding
+  exclude_protected_areas: true # assumed expert-style judgement; literature support UNVERIFIED: legal and environmental protection exclusion
 
 # ── Step 2: AHP (Analytic Hierarchy Process) ──────────────────────────────────
 # Multi-criteria decision weights derived from pairwise comparison matrix.
 # Fixed beforehand; NEVER tuned with labels. Consistency Ratio (CR) must be < 0.10.
+# All matrix comparisons are assumed expert-style judgements; literature support UNVERIFIED.
 ahp:
   max_cr: 0.10
   score_multiplier: 100.0 # Scales ahp_score to 0-100 range
