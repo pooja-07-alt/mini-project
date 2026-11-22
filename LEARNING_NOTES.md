@@ -173,6 +173,16 @@ Instead of merely comparing global averages across all 8 folds (e.g. RF mean AUC
 - We count how many folds out of 8 showed an improvement (e.g., 6 out of 8 folds improved for RF).
 - **Comparison to Fold-to-Fold Standard Deviation:** If the average improvement is +0.018, but the standard deviation from block to block is ±0.061, the improvement is smaller than the natural swing caused by geographical terrain differences. This teaches us that terrain variability across valleys is a much stronger factor than whether AHP is fed into the tree.
 
+### What are "AHP-Aligned" vs "AHP-Misaligned" Synthetic Scenarios?
+
+When we build a hybrid model (AHP + ML), an important scientific question arises:
+*What happens if the human expert's weights were wrong all along?*
+- In an **AHP-aligned** scenario: The true laws of nature match the engineer's beliefs (e.g. slope and stream flow are indeed the most critical factors). In this world, AHP performs decently on its own, and giving the AHP score to Random Forest gives it a slight boost because the expert gave it good advice.
+- In an **AHP-misaligned** scenario: The true laws of nature differ from the engineer's beliefs (e.g., subsurface rock permeability and monsoon rainfall matter 5 times more than slope).
+  - In this world, AHP's ranking ability drops noticeably (from 0.72 AUC down to 0.67 AUC).
+  - But purely data-driven machine learning (Random Forest and XGBoost) barely stumbles: it ignores human bias and learns directly from the data what actually matters, staying above 0.73 AUC.
+- **Why this test is crucial:** It shows why we must never blindly trust rule-based formulas without empirical field validation. When we run this code on real Karnataka check dams in Stage 6, the pipeline will automatically reveal whether expert rules match field reality or whether machine learning reveals surprises.
+
 ---
 
 ## Stage 2 — Study Area & Data

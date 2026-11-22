@@ -102,6 +102,7 @@ def generate_synthetic_dataset_v2(
     config: Optional[dict] = None,
     n_samples: Optional[int] = None,
     random_seed: Optional[int] = None,
+    scenario: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Generate synthetic v2 candidate stream sites.
@@ -113,11 +114,16 @@ def generate_synthetic_dataset_v2(
       3. Labels are produced via a latent suitability process that includes observed
          environmental drivers, an unobserved geotechnical/subsurface factor, and noise.
          This prevents artificial 0.99 AUC and bounds model performance to realistic 0.75-0.90.
+      4. Configurable label scenario: 'ahp_aligned' (default) where terrain/flow align with AHP,
+         or 'ahp_misaligned' where rainfall and lithology dominate and slope matters less.
     """
     if config is None:
         config = load_config()
 
     syn_cfg = config.get("synthetic_v2", {})
+    if scenario is None:
+        scenario = syn_cfg.get("scenario", "ahp_aligned")
+
     n = n_samples or syn_cfg.get("n_samples", 3000)
     seed = random_seed if random_seed is not None else syn_cfg.get("random_seed", 42)
     rng = np.random.default_rng(seed)
@@ -237,19 +243,37 @@ def generate_synthetic_dataset_v2(
     penalty[stream_order > 3] -= 2.5
 
     # Latent logit: observed environmental drivers + unobserved factor + noise
-    latent_z = (
-        1.6 * slope_suit
-        + 1.5 * fa_suit
-        + 1.2 * twi_suit
-        + 1.2 * rf_suit
-        + 1.0 * soil_suit
-        + 0.9 * lith_suit
-        + 0.8 * road_suit
-        + 0.6 * vw_suit
-        + 1.0 * unobserved_factor  # Crucial unobserved factor
-        + penalty
-        - 1.8  # Intercept controlling base rate
-    )
+    if scenario == "ahp_misaligned":
+        # In this scenario, real-world suitability departs strongly from AHP assumptions:
+        # Rainfall, lithology, and soil dominate; slope and flow accumulation have low influence.
+        latent_z = (
+            0.4 * slope_suit
+            + 0.5 * fa_suit
+            + 0.5 * twi_suit
+            + 2.2 * rf_suit
+            + 1.6 * soil_suit
+            + 1.8 * lith_suit
+            + 0.5 * road_suit
+            + 0.4 * vw_suit
+            + 1.0 * unobserved_factor  # Crucial unobserved factor preserved
+            + penalty
+            - 1.8  # Intercept
+        )
+    else:
+        # Default: "ahp_aligned" roughly matches AHP priority order (slope and flow lead)
+        latent_z = (
+            1.6 * slope_suit
+            + 1.5 * fa_suit
+            + 1.2 * twi_suit
+            + 1.2 * rf_suit
+            + 1.0 * soil_suit
+            + 0.9 * lith_suit
+            + 0.8 * road_suit
+            + 0.6 * vw_suit
+            + 1.0 * unobserved_factor  # Crucial unobserved factor
+            + penalty
+            - 1.8  # Intercept controlling base rate
+        )
 
     # Stochastic logistic noise
     noise = rng.logistic(loc=0.0, scale=0.35, size=n)

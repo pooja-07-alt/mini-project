@@ -1,0 +1,11 @@
+Scenario,Method,AUC-ROC (mean ± std),PR-AUC (mean ± std),Pooled AUC-ROC,Pooled PR-AUC
+ahp_aligned,AHP-only,0.720 ± 0.064,0.776 ± 0.073,0.716,0.771
+ahp_aligned,RF ML-only,0.736 ± 0.061,0.782 ± 0.082,0.737,0.779
+ahp_aligned,XGB ML-only,0.721 ± 0.049,0.766 ± 0.075,0.725,0.762
+ahp_aligned,RF + ahp_score,0.754 ± 0.044,0.787 ± 0.072,0.753,0.785
+ahp_aligned,XGB + ahp_score,0.720 ± 0.026,0.752 ± 0.063,0.721,0.745
+ahp_misaligned,AHP-only,0.670 ± 0.055,0.785 ± 0.086,0.663,0.778
+ahp_misaligned,RF ML-only,0.732 ± 0.061,0.830 ± 0.081,0.753,0.835
+ahp_misaligned,XGB ML-only,0.714 ± 0.061,0.813 ± 0.084,0.734,0.821
+ahp_misaligned,RF + ahp_score,0.735 ± 0.045,0.835 ± 0.080,0.752,0.842
+ahp_misaligned,XGB + ahp_score,0.721 ± 0.061,0.812 ± 0.086,0.738,0.817

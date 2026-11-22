@@ -201,6 +201,35 @@
 - Documented Decision D-15 in `DECISIONS.md`.
 - Status: SYNTHETIC - pipeline test, not a real finding.
 
+### Step 5b: Synthetic Sensitivity Scenarios (Aligned vs Misaligned) ✅
+- Added `scenario` parameter (`"ahp_aligned"` vs `"ahp_misaligned"`) to `src/generate_synthetic.py` and `config.yaml`.
+  - Main synthetic candidate datasets (`candidates_v2.csv`, `candidates_v2_ahp.csv`) remain completely untouched.
+  - In `ahp_aligned`, terrain slope and drainage area dominate ground truth suitability (matching AHP priorities).
+  - In `ahp_misaligned`, rainfall and lithology dominate ground truth suitability, while slope has minor influence. The latent unobserved factor is preserved in both.
+- Benchmarked all 5 suitability methods across both scenarios using 8-fold spatial block cross-validation:
+  | Scenario | Method | AUC-ROC (mean ± std) | PR-AUC (mean ± std) | Pooled AUC-ROC | Pooled PR-AUC |
+  | :--- | :--- | :---: | :---: | :---: | :---: |
+  | **ahp_aligned** | AHP-only | 0.720 ± 0.064 | 0.776 ± 0.073 | 0.716 | 0.771 |
+  | ahp_aligned | RF ML-only | 0.736 ± 0.061 | 0.782 ± 0.082 | 0.737 | 0.779 |
+  | ahp_aligned | XGB ML-only | 0.721 ± 0.049 | 0.766 ± 0.075 | 0.725 | 0.762 |
+  | ahp_aligned | RF + ahp_score | **0.754 ± 0.044** | **0.787 ± 0.072** | **0.753** | **0.785** |
+  | ahp_aligned | XGB + ahp_score | 0.720 ± 0.026 | 0.752 ± 0.063 | 0.721 | 0.745 |
+  | **ahp_misaligned** | AHP-only | 0.670 ± 0.055 | 0.785 ± 0.086 | 0.663 | 0.778 |
+  | ahp_misaligned | RF ML-only | **0.732 ± 0.061** | 0.830 ± 0.081 | **0.753** | 0.835 |
+  | ahp_misaligned | XGB ML-only | 0.714 ± 0.061 | 0.813 ± 0.084 | 0.734 | 0.821 |
+  | ahp_misaligned | RF + ahp_score | 0.735 ± 0.045 | **0.835 ± 0.080** | 0.752 | **0.842** |
+  | ahp_misaligned | XGB + ahp_score | 0.721 ± 0.061 | 0.812 ± 0.086 | 0.738 | 0.817 |
+- Key Finding:
+  - When expert rules align with physical terrain reality, AHP provides a valuable inductive bias (+0.018 AUC).
+  - When expert rules misjudge terrain reality, AHP-only discrimination degrades significantly (AUC drops from 0.720 to 0.670), whereas machine learning algorithms dynamically adapt to the empirical training patterns (RF ML-only achieves 0.732 / pooled 0.753).
+  - Demonstrates why empirical validation on real data in Stage 6 is the true test: the optimal method depends on whether expert weights accurately reflect the study basin.
+- Exported artifacts:
+  - `outputs/stage1b_scenario_comparison.csv`
+  - `outputs/stage1b_scenario_comparison.md`
+  - `outputs/stage1b_scenario_notes.md`
+- Documented Decision D-16 in `DECISIONS.md`.
+- Status: SYNTHETIC - pipeline test, not a real finding.
+
 ---
 
 ## Stage 2 — Study Area & Data Collection ⬜

@@ -44,6 +44,7 @@ synthetic_v2:
   n_spatial_blocks: 8
   random_seed: 42
   positive_fraction: 0.22 # assumed expert-style judgement; literature support UNVERIFIED
+  scenario: "ahp_aligned" # Options: "ahp_aligned" (follows AHP priority), "ahp_misaligned" (rainfall/geology dominate)
   lat_range: [15.10, 15.65] # Representative sub-watershed box in Karnataka
   lon_range: [75.05, 75.60]
   # Latent process weights for realistic label generation:

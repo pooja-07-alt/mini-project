@@ -256,6 +256,32 @@ Comparing AHP scores (continuous [0, 100], rule-based) against ML models (probab
 
 ---
 
+### D-16: Synthetic Sensitivity Scenarios — AHP-Aligned vs. AHP-Misaligned (Step 5b)
+
+**Context:**
+A fundamental critique of expert-weighted systems (like AHP) is that their predictive power depends entirely on whether the engineer's assigned weights match the true hydrologic and geological mechanisms governing check dam viability. If the weights are correct, AHP serves as a helpful prior. If the weights are misspecified, AHP misleads the selection process.
+
+**Implementation:**
+Configured `src/generate_synthetic.py` with two label scenarios (preserving the unobserved factor $u \sim \mathcal{N}(0, 1)$ in both):
+1. `ahp_aligned`: Ground-truth suitability follows AHP priority ordering (slope and flow accumulation dominate, weights 1.6 and 1.5).
+2. `ahp_misaligned`: Ground-truth suitability deliberately departs from AHP (annual rainfall and lithology dominate, weights 2.2 and 1.8; slope and flow have low influence, weights 0.4 and 0.5).
+
+**Benchmark Findings (8 Spatial Folds):**
+- **When AHP is aligned:**
+  - `AHP-only` achieves **0.720 $\pm$ 0.064** AUC-ROC (pooled 0.716).
+  - Feeding `ahp_score` to Random Forest boosts performance from 0.736 to **0.754 $\pm$ 0.044** (improving 6 of 8 folds).
+- **When AHP is misaligned:**
+  - `AHP-only` AUC-ROC drops to **0.670 $\pm$ 0.055** (pooled 0.663) — a significant loss in ranking quality.
+  - In contrast, ML-only models adapt dynamically from training data: `RF ML-only` achieves **0.732 $\pm$ 0.061** (pooled 0.753) and `XGB ML-only` achieves **0.714 $\pm$ 0.061** (pooled 0.734).
+  - Adding the misspecified AHP score yields **0.735** for RF, showing tree models learn to suppress unhelpful features.
+
+**Implications for Stage 6 (Real Data):**
+In synthetic tests, alignment is controlled programmatically. On real Karnataka field data, the true relationship between terrain features and historical structure longevity is unknown beforehand. The comparison pipeline built here will determine whether civil engineering guidelines or empirical machine learning models better explain real-world check dam outcomes.
+
+**Status:** SYNTHETIC - pipeline test, not a real finding.
+
+---
+
 ## Stage 2 Decisions
 
 *(fill in after completing Stage 2)*

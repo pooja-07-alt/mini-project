@@ -309,6 +309,29 @@ def test_step5_comparison_artifacts():
     assert "Does Adding `ahp_score` Help?" in content
 
 
+def test_step5b_scenario_comparison_artifacts():
+    """Verify Step 5b scenario sensitivity comparison artifacts exist and are valid."""
+    csv_path = PROJECT_ROOT / "outputs" / "stage1b_scenario_comparison.csv"
+    assert csv_path.exists(), "stage1b_scenario_comparison.csv missing"
+    df = pd.read_csv(csv_path)
+    assert len(df) == 10  # 2 scenarios * 5 methods
+    assert set(df["Scenario"]) == {"ahp_aligned", "ahp_misaligned"}
+    expected_methods = {"AHP-only", "RF ML-only", "XGB ML-only", "RF + ahp_score", "XGB + ahp_score"}
+    assert set(df["Method"]) == expected_methods
+
+    for col in ["Scenario", "Method", "AUC-ROC (mean ± std)", "PR-AUC (mean ± std)", "Pooled AUC-ROC", "Pooled PR-AUC"]:
+        assert col in df.columns
+
+    md_path = PROJECT_ROOT / "outputs" / "stage1b_scenario_comparison.md"
+    assert md_path.exists(), "stage1b_scenario_comparison.md missing"
+    notes_path = PROJECT_ROOT / "outputs" / "stage1b_scenario_notes.md"
+    assert notes_path.exists(), "stage1b_scenario_notes.md missing"
+    notes_content = notes_notes = notes_path.read_text(encoding="utf-8")
+    assert "SYNTHETIC - pipeline test, not a real finding" in notes_content
+    assert "ahp_misaligned" in notes_content
+
+
+
 
 
 
