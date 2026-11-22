@@ -241,6 +241,25 @@ def test_step3_gap_fill_artifacts():
     assert citations_path.exists(), "docs/CITATIONS_TO_VERIFY.md missing"
 
 
+def test_step4_ml_ahp_artifacts():
+    """Verify that Step 4 OOF predictions and CV metrics with ahp_score exist and are valid."""
+    oof_ahp_path = PROJECT_ROOT / "outputs" / "stage1b_oof_ml_ahp.csv"
+    assert oof_ahp_path.exists(), "stage1b_oof_ml_ahp.csv missing"
+    df_oof = pd.read_csv(oof_ahp_path)
+    for col in ["site_id", "block_id", "label", "ahp_score", "rf_prob_ml_ahp", "xgb_prob_ml_ahp"]:
+        assert col in df_oof.columns
+
+    assert len(df_oof) > 0
+    assert df_oof["rf_prob_ml_ahp"].between(0.0, 1.0).all()
+    assert df_oof["xgb_prob_ml_ahp"].between(0.0, 1.0).all()
+
+    cv_ahp_path = PROJECT_ROOT / "outputs" / "stage1b_cv_ml_ahp.csv"
+    assert cv_ahp_path.exists(), "stage1b_cv_ml_ahp.csv missing"
+    df_cv = pd.read_csv(cv_ahp_path)
+    assert len(df_cv) == 16  # 8 folds * 2 models
+
+
+
 
 
 

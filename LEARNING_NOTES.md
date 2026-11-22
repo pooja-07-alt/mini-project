@@ -139,6 +139,12 @@ If two candidate sites are 100 metres apart along the same valley, they share al
 - If you use a random 80/20 train/test split, site A might be in the training set and site B in the test set. The model can get high test accuracy simply by "remembering" what the valley looked like around site A.
 - **Spatial CV** solves this by cutting the map into distinct spatial blocks. When Block 3 is tested, the model is trained only on Blocks 1, 2, 4, 5, 6, 7, and 8. The model must predict suitability in an entire unfamiliar region without relying on spatial neighbor memory.
 
+### What is "Method A" (ML with AHP score as a feature)?
+
+In pure machine learning, the algorithm tries to discover patterns solely from raw numbers (slope, flow accumulation, rainfall). But civil engineers already have decades of hydrological intuition codified into rule-based scoring systems like AHP.
+- **Method A** is a simple hybrid: we calculate the rule-based `ahp_score` upfront (using zero labels) and give it to Random Forest and XGBoost as an **extra feature column**.
+- **Why do this?** In small or noisy datasets, the trees might struggle to find the exact interaction between slope, rainfall, and soil. By giving them the pre-computed expert score, the model gets a head start ("inductive bias"). The tree can either trust the AHP score, refine it, or override it when the data disagrees.
+
 ---
 
 ## Stage 2 — Study Area & Data

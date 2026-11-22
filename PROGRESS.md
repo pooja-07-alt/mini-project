@@ -93,11 +93,11 @@
 
 ### Step 1: Hard Constraints & Candidate Filtering ✅
 - Implemented `apply_hard_constraints()` in `src/constraints.py`.
-- Formulated 7 strict engineering/environmental rules with thresholds configured in `config.yaml` (marked ASSUMPTION - verify).
+- Formulated 7 strict engineering/environmental rules with thresholds configured in `config.yaml` (marked assumed expert-style judgement; literature support UNVERIFIED).
 - Evaluated against 3,000 synthetic v2 raw sites:
   - 563 sites passed all constraints (18.8% survival rate).
-  - Preserved 206 positive labels (36.6% positive class balance among passed candidates).
-  - 658 positives removed from unfeasible terrain (primarily sub-1.0 km² catchments and steep slopes).
+  - Preserved 331 positive labels (58.8% positive class balance among passed candidates).
+  - 566 positives removed from unfeasible terrain (primarily sub-1.0 km² catchments and steep slopes).
 - Generated output candidate table: `data/tables/candidates_v2.csv`.
 - Generated audit table: `outputs/stage1b_constraint_funnel.csv`.
 - Added unit tests for hand-made rows verifying each rule independently.
@@ -148,6 +148,27 @@
   - Complete block and site disjointness between train and test sets in all folds.
   - Validity and bounds of out-of-fold probability predictions.
   - Integrity of per-block counts, per-fold CV table, SHAP plot, and citations registry.
+- Status: SYNTHETIC - pipeline test, not a real finding.
+
+### Step 4: Method A — ML with ahp_score as Feature ✅
+- Implemented `run_step4_ml_ahp()` in `src/ml_model.py`.
+- Evaluated Random Forest and XGBoost across the exact same 8 spatial folds and hyperparameters, with `ahp_score` included as an additional feature.
+- Out-of-fold spatial CV performance (mean ± std across 8 blocks):
+  - **Random Forest (+ AHP score):**
+    - AUC-ROC: **0.754 $\pm$ 0.044** (up from 0.736 in ML-only)
+    - PR-AUC: **0.787 $\pm$ 0.072** (up from 0.782 in ML-only)
+    - Precision: **0.732 $\pm$ 0.090**
+    - Recall: **0.782 $\pm$ 0.125**
+    - F1: **0.749 $\pm$ 0.078**
+  - **XGBoost (+ AHP score):**
+    - AUC-ROC: **0.720 $\pm$ 0.026** (vs 0.721 in ML-only)
+    - PR-AUC: **0.752 $\pm$ 0.063** (vs 0.766 in ML-only)
+    - Precision: **0.719 $\pm$ 0.081**
+    - Recall: **0.738 $\pm$ 0.100**
+    - F1: **0.725 $\pm$ 0.073**
+- Exported OOF predictions to `outputs/stage1b_oof_ml_ahp.csv` and CV metrics to `outputs/stage1b_cv_ml_ahp.csv`.
+- Added unit tests in `tests/test_stage1b.py` verifying file creation, bounds, and metrics schema.
+- Documented Decision D-14 in `DECISIONS.md`.
 - Status: SYNTHETIC - pipeline test, not a real finding.
 
 ---

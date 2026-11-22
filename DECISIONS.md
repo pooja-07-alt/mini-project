@@ -213,6 +213,26 @@ AHP provides a defensible multi-criteria framework rooted in matrix algebra rath
 
 ---
 
+### D-14: Method A — Hybrid Model with ahp_score as an Input Feature (Step 4)
+
+**Options considered:**
+- A) Separate AHP and ML models without sharing features, comparing them only at the final ranking stage.
+- B) Method A: Feed the prior knowledge distilled in `ahp_score` directly into Random Forest and XGBoost as an additional numeric feature alongside the raw terrain variables.
+
+**Choice:** B
+
+**Reason:**
+1. Method A tests whether explicit expert domain knowledge (the compound AHP composite score) provides inductive bias that helps tree-based algorithms identify suitable structures in data-constrained regimes.
+2. The exact same 8 spatial blocks and leave-one-block-out isolation rules are maintained. The `ahp_score` is computed without labels beforehand, ensuring that no target leakage occurs.
+3. Out-of-fold spatial CV results on synthetic data:
+   - RF with AHP: AUC-ROC **0.754 $\pm$ 0.044**, PR-AUC **0.787 $\pm$ 0.072** (vs 0.736 / 0.782 ML-only).
+   - XGB with AHP: AUC-ROC **0.720 $\pm$ 0.026**, PR-AUC **0.752 $\pm$ 0.063** (vs 0.721 / 0.766 ML-only).
+4. These results provide the foundation for the rigorous standardized 5-method comparison in Step 5.
+
+**Status:** SYNTHETIC - pipeline test, not a real finding.
+
+---
+
 ## Stage 2 Decisions
 
 *(fill in after completing Stage 2)*

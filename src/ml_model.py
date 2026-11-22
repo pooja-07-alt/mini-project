@@ -443,14 +443,81 @@ def run_step3_ml_only(config: Optional[dict] = None) -> Tuple[pd.DataFrame, pd.D
     return all_folds, oof_df
 
 
+def run_step4_ml_ahp(config: Optional[dict] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Execute Step 4: Method A — ML models with ahp_score as an extra feature.
+    Uses the exact same 8 spatial folds and hyperparameters as Step 3.
+
+    Saves:
+      - outputs/stage1b_oof_ml_ahp.csv
+      - outputs/stage1b_cv_ml_ahp.csv
+    """
+    if config is None:
+        config = load_config()
+
+    project_root = Path(__file__).resolve().parent.parent
+    candidates_path = project_root / config["paths"]["candidates_ahp_csv"]
+    print("=" * 65)
+    print("STAGE 1b - STEP 4: METHOD A (ML WITH AHP SCORE AS FEATURE)")
+    print("=" * 65)
+    print(f"Loading candidates: {candidates_path.relative_to(project_root)}")
+    df = pd.read_csv(candidates_path)
+
+    # 1. Random Forest with ahp_score
+    print("\nRunning Spatial CV: Random Forest (+ ahp_score)...")
+    rf_folds, rf_oof = run_spatial_block_cv(df, "random_forest", config=config, include_ahp=True)
+
+    # 2. XGBoost with ahp_score
+    print("Running Spatial CV: XGBoost (+ ahp_score)...")
+    xgb_folds, xgb_oof = run_spatial_block_cv(df, "xgboost", config=config, include_ahp=True)
+
+    all_folds = pd.concat([rf_folds, xgb_folds], ignore_index=True)
+
+    # Save per-fold CV metrics
+    cv_out = project_root / config["paths"].get("cv_ml_ahp_csv", "outputs/stage1b_cv_ml_ahp.csv")
+    cv_out.parent.mkdir(parents=True, exist_ok=True)
+    all_folds.to_csv(cv_out, index=False)
+    print(f"\n✅ Per-fold CV metrics saved to: {cv_out.relative_to(project_root)}")
+
+    # Assemble Out-of-Fold Predictions
+    oof_df = pd.DataFrame({
+        "site_id": df["site_id"],
+        "block_id": df["block_id"],
+        "lat": df["lat"],
+        "lon": df["lon"],
+        "label": df["label"],
+        "ahp_score": df["ahp_score"],
+        "rf_prob_ml_ahp": rf_oof.round(4),
+        "xgb_prob_ml_ahp": xgb_oof.round(4),
+    })
+    oof_out = project_root / config["paths"].get("oof_ml_ahp_csv", "outputs/stage1b_oof_ml_ahp.csv")
+    oof_out.parent.mkdir(parents=True, exist_ok=True)
+    oof_df.to_csv(oof_out, index=False)
+    print(f"✅ Out-of-fold predictions saved to: {oof_out.relative_to(project_root)}")
+
+    print("\nOut-of-Fold Spatial CV Summary (Mean +/- Std across 8 blocks):")
+    summary = all_folds.groupby("model")[["auc_roc", "pr_auc", "precision", "recall", "f1"]].agg(
+        ["mean", "std"]
+    ).round(3)
+    print(summary.to_string())
+
+    print("\n[SYNTHETIC - pipeline test, not a real finding]")
+    return all_folds, oof_df
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run ML suitability models with spatial CV.")
     parser.add_argument("--config", type=str, default="config.yaml", help="Path to config.yaml")
+    parser.add_argument("--step", type=str, default="all", choices=["3", "4", "all"], help="Pipeline step to run (3, 4, or all)")
     args = parser.parse_args()
 
     project_root = Path(__file__).resolve().parent.parent
     config = load_config(project_root / args.config)
-    run_step3_ml_only(config=config)
+
+    if args.step in ["3", "all"]:
+        run_step3_ml_only(config=config)
+    if args.step in ["4", "all"]:
+        run_step4_ml_ahp(config=config)
 
 
 if __name__ == "__main__":
